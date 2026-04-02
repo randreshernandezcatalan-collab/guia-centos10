@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Protocolos de Enrutamiento</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f1a;
+    --surface: #131629;
+    --border: #1e2340;
+    --dynamic: #a855f7;
+    --dynamic-light: #c084fc;
+    --dynamic-glow: rgba(168,85,247,0.25);
+    --static: #38bdf8;
+    --static-light: #7dd3fc;
+    --static-glow: rgba(56,189,248,0.2);
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --accent-yellow: #fbbf24;
+    --node-bg: #1a1f35;
+    --node-border: #2d3561;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    font-family: 'DM Sans', sans-serif;
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: auto;
+    padding: 40px 20px 60px;
+  }
+
+  /* Grain texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+  }
+
+  .page {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  /* Header */
+  header {
+    text-align: center;
+    margin-bottom: 56px;
+    animation: fadeDown 0.6s ease both;
+  }
+
+  header .label {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+    display: block;
+  }
+
+  header h1 {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+    font-size: clamp(26px, 4vw, 40px);
+    background: linear-gradient(135deg, #e2e8f0 0%, #a855f7 50%, #38bdf8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.02em;
+  }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    justify-content: center;
+    gap: 28px;
+    margin-bottom: 48px;
+    animation: fadeDown 0.6s 0.1s ease both;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+
+  .legend-dot.dyn { background: var(--dynamic); box-shadow: 0 0 8px var(--dynamic); }
+  .legend-dot.sta { background: var(--static); box-shadow: 0 0 8px var(--static); }
+
+  /* Tree layout */
+  .tree {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    animation: fadeUp 0.7s 0.2s ease both;
+  }
+
+  /* Root node */
+  .root-node {
+    background: linear-gradient(135deg, var(--node-bg), #1e2545);
+    border: 1.5px solid var(--node-border);
+    border-radius: 12px;
+    padding: 14px 36px;
+    font-weight: 600;
+    font-size: 17px;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    box-shadow: 0 0 40px rgba(168,85,247,0.08), 0 0 0 1px rgba(255,255,255,0.04);
+    position: relative;
+    z-index: 2;
+  }
+
+  /* Branch connector from root */
+  .root-branches {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    position: relative;
+    margin-top: 0;
+  }
+
+  /* Two main columns */
+  .main-cols {
+    display: flex;
+    gap: 80px;
+    align-items: flex-start;
+    justify-content: center;
+    width: 100%;
+  }
+
+  .col-dynamic, .col-static {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* SVG connectors */
+  svg.connector {
+    overflow: visible;
+    display: block;
+  }
+
+  /* Generic node */
+  .node {
+    border-radius: 10px;
+    padding: 10px 22px;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    position: relative;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: default;
+  }
+
+  .node:hover {
+    transform: translateY(-2px);
+  }
+
+  .node.dyn {
+    background: linear-gradient(135deg, rgba(168,85,247,0.12), rgba(168,85,247,0.06));
+    border: 1px solid rgba(168,85,247,0.35);
+    color: var(--dynamic-light);
+    box-shadow: 0 0 20px rgba(168,85,247,0.08);
+  }
+
+  .node.dyn:hover {
+    box-shadow: 0 0 28px rgba(168,85,247,0.2), 0 4px 16px rgba(0,0,0,0.3);
+  }
+
+  .node.sta {
+    background: linear-gradient(135deg, rgba(56,189,248,0.12), rgba(56,189,248,0.06));
+    border: 1px solid rgba(56,189,248,0.35);
+    color: var(--static-light);
+    box-shadow: 0 0 20px rgba(56,189,248,0.08);
+  }
+
+  .node.sta:hover {
+    box-shadow: 0 0 28px rgba(56,189,248,0.2), 0 4px 16px rgba(0,0,0,0.3);
+  }
+
+  .node.leaf {
+    font-size: 13px;
+    padding: 8px 18px;
+    font-family: 'Space Mono', monospace;
+    font-weight: 400;
+  }
+
+  .node.leaf.dyn {
+    background: rgba(168,85,247,0.08);
+    border-color: rgba(168,85,247,0.25);
+    color: #d8b4fe;
+  }
+
+  .node.leaf.sta {
+    background: rgba(56,189,248,0.08);
+    border-color: rgba(56,189,248,0.25);
+    color: #bae6fd;
+  }
+
+  /* Row utility */
+  .row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 40px;
+  }
+
+  .col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* Connector lines using CSS */
+  .v-line {
+    width: 2px;
+    background: linear-gradient(to bottom, rgba(168,85,247,0.5), rgba(168,85,247,0.15));
+    margin: 0 auto;
+  }
+
+  .v-line.sta {
+    background: linear-gradient(to bottom, rgba(56,189,248,0.5), rgba(56,189,248,0.15));
+  }
+
+  /* H-fork connector SVG inline */
+  .fork-svg {
+    display: block;
+    overflow: visible;
+  }
+
+  /* Admin distances table */
+  .ad-table {
+    margin: 60px auto 0;
+    max-width: 520px;
+    background: linear-gradient(135deg, rgba(168,85,247,0.08), rgba(56,189,248,0.05));
+    border: 1px solid rgba(168,85,247,0.2);
+    border-radius: 16px;
+    padding: 28px 32px;
+    animation: fadeUp 0.7s 0.4s ease both;
+  }
+
+  .ad-table h3 {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--dynamic-light);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .ad-table h3::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(168,85,247,0.2);
+  }
+
+  .ad-rows {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .ad-row {
+    display: contents;
+  }
+
+  .ad-row > div {
+    padding: 10px 16px;
+    background: var(--node-bg);
+    font-size: 13.5px;
+    transition: background 0.15s;
+  }
+
+  .ad-row:hover > div {
+    background: rgba(168,85,247,0.1);
+  }
+
+  .ad-row > div:last-child {
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+    font-size: 14px;
+    text-align: right;
+    color: var(--accent-yellow);
+  }
+
+  .ad-row:first-child > div { border-radius: 10px 10px 0 0; }
+  .ad-row:last-child > div { border-radius: 0 0 10px 10px; }
+
+  /* Animations */
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Tooltip */
+  .node[data-tip] {
+    cursor: help;
+  }
+
+  .tooltip {
+    position: fixed;
+    background: #1e2545;
+    border: 1px solid rgba(168,85,247,0.4);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 100;
+    max-width: 200px;
+    line-height: 1.5;
+    white-space: normal;
+  }
+
+  .tooltip.show { opacity: 1; }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    margin-top: 48px;
+    font-size: 12px;
+    color: #334155;
+    font-family: 'Space Mono', monospace;
+    animation: fadeUp 0.7s 0.5s ease both;
+  }
+</style>
+</head>
+<body>
+
+<div class="tooltip" id="tooltip"></div>
+
+<div class="page">
+
+  <header>
+    <span class="label">Redes &amp; Telecomunicaciones</span>
+    <h1>Protocolos de Enrutamiento</h1>
+  </header>
+
+  <div class="legend">
+    <div class="legend-item"><span class="legend-dot dyn"></span> Dinámicos</div>
+    <div class="legend-item"><span class="legend-dot sta"></span> Estáticos</div>
+  </div>
+
+  <!-- TREE -->
+  <div class="tree">
+
+    <!-- ROOT -->
+    <div class="root-node">Protocolos de Enrutamiento</div>
+
+    <!-- Root fork SVG -->
+    <svg width="700" height="50" class="fork-svg" viewBox="0 0 700 50">
+      <!-- left branch to dynamic (~200px left of center) -->
+      <path d="M350,0 C350,20 170,20 170,50" fill="none" stroke="url(#grad-dyn)" stroke-width="2"/>
+      <!-- right branch to static (~200px right) -->
+      <path d="M350,0 C350,20 530,20 530,50" fill="none" stroke="url(#grad-sta)" stroke-width="2"/>
+      <defs>
+        <linearGradient id="grad-dyn" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#a855f7" stop-opacity="0.8"/>
+          <stop offset="100%" stop-color="#a855f7" stop-opacity="0.4"/>
+        </linearGradient>
+        <linearGradient id="grad-sta" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.8"/>
+          <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.4"/>
+        </linearGradient>
+      </defs>
+    </svg>
+
+    <!-- MAIN TWO COLUMNS -->
+    <div class="main-cols">
+
+      <!-- ========== DYNAMIC COLUMN ========== -->
+      <div class="col-dynamic">
+        <div class="node dyn" data-tip="Se adaptan automáticamente a los cambios en la topología de red.">Dinámicos</div>
+
+        <!-- Fork to IGP and EGP -->
+        <svg width="380" height="50" viewBox="0 0 380 50" class="fork-svg">
+          <path d="M190,0 C190,20 100,20 100,50" fill="none" stroke="rgba(168,85,247,0.5)" stroke-width="1.5"/>
+          <path d="M190,0 C190,20 280,20 280,50" fill="none" stroke="rgba(168,85,247,0.5)" stroke-width="1.5"/>
+        </svg>
+
+        <div class="row" style="align-items:flex-start; gap:60px;">
+
+          <!-- IGP -->
+          <div class="col">
+            <div class="node dyn" data-tip="Interior Gateway Protocol — usado dentro de un Sistema Autónomo.">Internal Gateway Protocol IGP</div>
+
+            <!-- Fork to Vector Distancia and Estado de Enlace -->
+            <svg width="300" height="50" viewBox="0 0 300 50" class="fork-svg">
+              <path d="M150,0 C150,20 75,20 75,50" fill="none" stroke="rgba(168,85,247,0.5)" stroke-width="1.5"/>
+              <path d="M150,0 C150,20 225,20 225,50" fill="none" stroke="rgba(168,85,247,0.5)" stroke-width="1.5"/>
+            </svg>
+
+            <div class="row" style="gap:30px; align-items:flex-start;">
+
+              <!-- Vector Distancia -->
+              <div class="col">
+                <div class="node dyn" style="font-size:13px;" data-tip="Ej: RIP. Usa el número de saltos como métrica. Envía la tabla completa a vecinos.">Vector Distancia</div>
+
+                <svg width="160" height="40" viewBox="0 0 160 40" class="fork-svg">
+                  <path d="M80,0 C80,15 40,15 40,40" fill="none" stroke="rgba(168,85,247,0.4)" stroke-width="1.5"/>
+                  <path d="M80,0 C80,15 120,15 120,40" fill="none" stroke="rgba(168,85,247,0.4)" stroke-width="1.5"/>
+                </svg>
+
+                <div class="row" style="gap:16px; align-items:flex-start;">
+                  <!-- RIP -->
+                  <div class="col">
+                    <div class="node leaf dyn" data-tip="Routing Information Protocol v1. Máx 15 saltos. Classfull.">RIP</div>
+                    <div class="v-line" style="height:24px;"></div>
+                    <div class="node leaf dyn" data-tip="RIP versión 2. Soporta VLSM/CIDR. Envía máscara en actualizaciones.">RIP V2</div>
+                    <div class="v-line" style="height:24px;"></div>
+                    <div class="node leaf dyn" data-tip="RIP Next Generation para IPv6.">RIPNG</div>
+                  </div>
+                  <!-- IGRP/EIGRP -->
+                  <div class="col">
+                    <div class="node leaf dyn" data-tip="Interior Gateway Routing Protocol. Propietario de Cisco. Obsoleto.">IGRP</div>
+                    <div class="v-line" style="height:24px;"></div>
+                    <div class="node leaf dyn" data-tip="Enhanced IGRP. Protocolo híbrido Cisco. Usa DUAL para convergencia rápida.">EIGRP</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Estado de Enlace -->
+              <div class="col">
+                <div class="node dyn" style="font-size:13px;" data-tip="Cada router construye un mapa completo de la red. Ej: OSPF.">Estado de Enlace</div>
+
+                <svg width="160" height="40" viewBox="0 0 160 40" class="fork-svg">
+                  <path d="M80,0 C80,15 50,15 50,40" fill="none" stroke="rgba(168,85,247,0.4)" stroke-width="1.5"/>
+                  <path d="M80,0 C80,15 110,15 110,40" fill="none" stroke="rgba(168,85,247,0.4)" stroke-width="1.5"/>
+                </svg>
+
+                <div class="row" style="gap:16px;">
+                  <!-- OSPF -->
+                  <div class="col">
+                    <div class="node leaf dyn" data-tip="Open Shortest Path First v2 para IPv4. Usa algoritmo Dijkstra. Estándar abierto.">OSPF v2</div>
+                    <div class="v-line" style="height:24px;"></div>
+                    <div class="node leaf dyn" data-tip="OSPFv3 añade soporte nativo para IPv6.">OSPFv3</div>
+                  </div>
+                  <!-- IS-IS -->
+                  <div class="col">
+                    <div class="node leaf dyn" data-tip="Intermediate System to Intermediate System. Usado en ISPs. Soporta IPv4 e IPv6.">IS-IS</div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- EGP -->
+          <div class="col">
+            <div class="node dyn" data-tip="External Gateway Protocol — usado entre Sistemas Autónomos distintos.">External Gateway Protocol</div>
+            <div class="v-line" style="height:36px;"></div>
+            <div class="node dyn" style="font-size:13px;" data-tip="Path Vector: usa la lista de AS como métrica para evitar bucles.">Vector Ruta</div>
+            <div class="v-line" style="height:36px;"></div>
+            <div class="node leaf dyn" data-tip="Border Gateway Protocol. El protocolo de enrutamiento de Internet. AD: 20 (eBGP) / 200 (iBGP).">BGP</div>
+
+            <svg width="130" height="40" viewBox="0 0 130 40" class="fork-svg">
+              <path d="M65,0 C65,15 35,15 35,40" fill="none" stroke="rgba(168,85,247,0.4)" stroke-width="1.5"/>
+              <path d="M65,0 C65,15 95,15 95,40" fill="none" stroke="rgba(168,85,247,0.4)" stroke-width="1.5"/>
+            </svg>
+
+            <div class="row" style="gap:16px;">
+              <div class="node leaf dyn" data-tip="Internal BGP: entre routers del mismo Sistema Autónomo.">IBGP</div>
+              <div class="node leaf dyn" data-tip="External BGP: entre routers de distintos Sistemas Autónomos.">EBGP</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ========== STATIC COLUMN ========== -->
+      <div class="col-dynamic" style="margin-top:0;">
+        <div class="node sta" data-tip="Configuradas manualmente por el administrador. No se adaptan automáticamente.">Estáticos</div>
+        <div class="v-line sta" style="height:50px;"></div>
+        <div class="node sta" data-tip="Rutas configuradas con una dirección destino y un next-hop específico.">Rutas Estáticas</div>
+        <div class="v-line sta" style="height:36px;"></div>
+        <div class="node sta" style="font-size:13px;" data-tip="Ruta 0.0.0.0/0 — enruta cualquier destino desconocido al gateway.">Rutas Por Defecto</div>
+        <div class="v-line sta" style="height:36px;"></div>
+        <div class="node leaf sta" data-tip="Ruta estática con AD mayor. Actúa como respaldo cuando la ruta principal falla.">Rutas Estáticas Flotantes</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ADMIN DISTANCE TABLE -->
+  <div class="ad-table">
+    <h3>Distancias Administrativas</h3>
+    <div class="ad-rows">
+      <div class="ad-row">
+        <div>Directamente Conectada</div>
+        <div>0</div>
+      </div>
+      <div class="ad-row">
+        <div>Ruta Estática</div>
+        <div>1</div>
+      </div>
+      <div class="ad-row">
+        <div>EIGRP Sumarizado</div>
+        <div>5</div>
+      </div>
+      <div class="ad-row">
+        <div>EIGRP</div>
+        <div>90</div>
+      </div>
+      <div class="ad-row">
+        <div>IGRP</div>
+        <div>100</div>
+      </div>
+      <div class="ad-row">
+        <div>OSPF</div>
+        <div>110</div>
+      </div>
+      <div class="ad-row">
+        <div>RIP</div>
+        <div>120</div>
+      </div>
+      <div class="ad-row">
+        <div>EIGRP Externo</div>
+        <div>170</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Protocolos de Enrutamiento &mdash; Material Educativo
+  </footer>
+
+</div>
+
+<script>
+  const tooltip = document.getElementById('tooltip');
+  const nodes = document.querySelectorAll('[data-tip]');
+
+  nodes.forEach(n => {
+    n.addEventListener('mousemove', e => {
+      tooltip.textContent = n.dataset.tip;
+      tooltip.classList.add('show');
+      let x = e.clientX + 14, y = e.clientY - 10;
+      if (x + 210 > window.innerWidth) x = e.clientX - 220;
+      tooltip.style.left = x + 'px';
+      tooltip.style.top  = y + 'px';
+    });
+    n.addEventListener('mouseleave', () => tooltip.classList.remove('show'));
+  });
+</script>
+</body>
+</html>
