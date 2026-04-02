@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>X11 Forwarding — Guía de Instalación</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0c0c0f;
+            --surface: #13131a;
+            --surface2: #1a1a24;
+            --border: rgba(255,255,255,0.06);
+            --primary: #c084fc;
+            --secondary: #f472b6;
+            --accent: #67e8f9;
+            --muted: rgba(192,132,252,0.3);
+            --text: rgba(255,255,255,0.85);
+            --text-dim: rgba(255,255,255,0.4);
+            --glow: 0 0 30px rgba(192,132,252,0.2);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(192,132,252,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(192,132,252,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* SIDEBAR */
+        .sidebar {
+            position: fixed;
+            left: 0; top: 0; bottom: 0;
+            width: 260px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+            overflow-y: auto;
+        }
+
+        .sidebar::-webkit-scrollbar { width: 4px; }
+        .sidebar::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 2px; }
+
+        .sidebar-header {
+            padding: 32px 24px 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-logo {
+            font-family: 'Syne', sans-serif;
+            font-weight: 800;
+            font-size: 1.1rem;
+            color: var(--primary);
+            letter-spacing: 1px;
+            text-shadow: var(--glow);
+            margin-bottom: 6px;
+        }
+
+        .sidebar-sub {
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .sidebar-nav { padding: 16px 0; flex: 1; }
+
+        .nav-section {
+            padding: 8px 24px 4px;
+            font-size: 0.6rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--secondary);
+            margin-top: 8px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 24px;
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 0.72rem;
+            transition: color 0.2s, background 0.2s;
+            border-left: 2px solid transparent;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            color: var(--primary);
+            background: rgba(192,132,252,0.04);
+            border-left-color: var(--primary);
+        }
+
+        .nav-item .num { color: rgba(192,132,252,0.3); font-size: 0.6rem; min-width: 20px; }
+
+        .sidebar-footer {
+            padding: 20px 24px;
+            border-top: 1px solid var(--border);
+            font-size: 0.62rem;
+            color: var(--text-dim);
+            line-height: 1.8;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(103,232,249,0.08);
+            border: 1px solid rgba(103,232,249,0.2);
+            padding: 4px 10px;
+            border-radius: 20px;
+            color: var(--accent);
+            font-size: 0.6rem;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+
+        .status-pill::before {
+            content: '';
+            width: 6px; height: 6px;
+            background: var(--accent);
+            border-radius: 50%;
+            animation: blink 2s infinite;
+        }
+
+        @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        /* MAIN */
+        .main { margin-left: 260px; min-height: 100vh; }
+
+        .hero {
+            padding: 80px 80px 60px;
+            border-bottom: 1px solid var(--border);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::after {
+            content: 'X11';
+            position: absolute;
+            right: -20px; top: 50%;
+            transform: translateY(-50%);
+            font-family: 'Syne', sans-serif;
+            font-weight: 800;
+            font-size: 200px;
+            color: transparent;
+            -webkit-text-stroke: 1px rgba(192,132,252,0.05);
+            pointer-events: none;
+            user-select: none;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(244,114,182,0.1);
+            border: 1px solid rgba(244,114,182,0.3);
+            padding: 6px 14px;
+            font-size: 0.65rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--secondary);
+            margin-bottom: 28px;
+        }
+
+        .hero-title {
+            font-family: 'Syne', sans-serif;
+            font-weight: 800;
+            font-size: clamp(2.5rem, 5vw, 4.5rem);
+            line-height: 1;
+            letter-spacing: -2px;
+            margin-bottom: 20px;
+        }
+
+        .hero-title .p { color: var(--primary); }
+        .hero-title .w { color: var(--text); }
+        .hero-title .d { color: var(--text-dim); }
+
+        .hero-desc {
+            max-width: 600px;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            line-height: 1.9;
+            margin-bottom: 40px;
+        }
+
+        .hero-meta { display: flex; gap: 32px; }
+
+        .meta-item { display: flex; flex-direction: column; gap: 4px; }
+        .meta-label { font-size: 0.6rem; letter-spacing: 3px; text-transform: uppercase; color: var(--text-dim); }
+        .meta-value { font-size: 0.8rem; color: var(--accent); }
+
+        /* Diagram box */
+        .diagram {
+            background: #08080d;
+            border: 1px solid rgba(192,132,252,0.1);
+            padding: 32px;
+            font-size: 0.75rem;
+            line-height: 2.4;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .diagram .node {
+            display: inline-block;
+            padding: 2px 12px;
+            border: 1px solid rgba(192,132,252,0.4);
+            color: var(--primary);
+            font-size: 0.72rem;
+        }
+
+        .diagram .node-green {
+            display: inline-block;
+            padding: 2px 12px;
+            border: 1px solid rgba(103,232,249,0.4);
+            color: var(--accent);
+            font-size: 0.72rem;
+        }
+
+        .diagram .arrow { color: rgba(192,132,252,0.4); }
+        .diagram .label { color: var(--text-dim); font-size: 0.65rem; }
+        .diagram .good { color: #4ade80; }
+        .diagram .bad { color: #f87171; }
+
+        /* Content */
+        .content { padding: 0 80px 80px; }
+
+        .chapter {
+            padding-top: 80px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 60px;
+        }
+
+        .chapter:last-child { border-bottom: none; }
+
+        .chapter-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 24px;
+            margin-bottom: 48px;
+        }
+
+        .chapter-num {
+            font-family: 'Syne', sans-serif;
+            font-size: 4rem;
+            font-weight: 800;
+            color: rgba(192,132,252,0.08);
+            line-height: 1;
+            flex-shrink: 0;
+            margin-top: -8px;
+        }
+
+        .chapter-tag {
+            font-size: 0.6rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--secondary);
+            margin-bottom: 8px;
+        }
+
+        .chapter-title {
+            font-family: 'Syne', sans-serif;
+            font-weight: 700;
+            font-size: 1.6rem;
+            color: var(--text);
+            margin-bottom: 10px;
+        }
+
+        .chapter-desc {
+            font-size: 0.78rem;
+            color: var(--text-dim);
+            max-width: 600px;
+            line-height: 1.9;
+        }
+
+        /* Step */
+        .step {
+            margin-bottom: 36px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            overflow: hidden;
+            transition: border-color 0.3s;
+        }
+
+        .step:hover { border-color: rgba(192,132,252,0.2); }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface2);
+        }
+
+        .step-title-wrap { display: flex; align-items: center; gap: 12px; }
+
+        .step-badge {
+            font-size: 0.6rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            border: 1px solid;
+        }
+
+        .step-badge.cmd { color: var(--primary); border-color: rgba(192,132,252,0.3); background: rgba(192,132,252,0.05); }
+        .step-badge.cfg { color: var(--accent); border-color: rgba(103,232,249,0.3); background: rgba(103,232,249,0.05); }
+        .step-badge.info { color: var(--secondary); border-color: rgba(244,114,182,0.3); background: rgba(244,114,182,0.05); }
+
+        .step-name { font-size: 0.8rem; color: var(--text); }
+        .step-num { font-size: 0.6rem; color: var(--text-dim); letter-spacing: 1px; }
+
+        .step-body { padding: 20px; }
+
+        .step-explain {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            line-height: 1.9;
+            margin-bottom: 16px;
+            padding: 12px 16px;
+            border-left: 2px solid rgba(244,114,182,0.4);
+            background: rgba(244,114,182,0.03);
+        }
+
+        /* Code block */
+        .code-block {
+            background: #08080d;
+            border: 1px solid rgba(255,255,255,0.05);
+            position: relative;
+            margin-bottom: 12px;
+        }
+
+        .code-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            background: rgba(255,255,255,0.02);
+        }
+
+        .code-lang { font-size: 0.6rem; letter-spacing: 2px; color: var(--text-dim); text-transform: uppercase; }
+
+        .copy-btn {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.6rem;
+            letter-spacing: 1px;
+            padding: 4px 10px;
+            background: transparent;
+            border: 1px solid rgba(192,132,252,0.2);
+            color: var(--primary);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .copy-btn:hover { background: rgba(192,132,252,0.08); }
+        .copy-btn.copied { color: var(--accent); border-color: rgba(103,232,249,0.3); }
+
+        pre {
+            padding: 20px;
+            overflow-x: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            line-height: 1.8;
+        }
+
+        pre::-webkit-scrollbar { height: 4px; }
+        pre::-webkit-scrollbar-thumb { background: var(--muted); }
+
+        .kw { color: var(--primary); }
+        .cm { color: rgba(255,255,255,0.22); }
+        .st { color: var(--accent); }
+        .sc { color: var(--secondary); }
+        .nm { color: #c792ea; }
+
+        /* File block */
+        .file-block {
+            background: #08080d;
+            border: 1px solid rgba(255,255,255,0.05);
+            margin-bottom: 12px;
+        }
+
+        .file-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            background: rgba(255,255,255,0.02);
+        }
+
+        .file-path { font-size: 0.68rem; color: var(--accent); }
+
+        /* Alert */
+        .alert {
+            display: flex;
+            gap: 12px;
+            padding: 12px 16px;
+            margin-bottom: 12px;
+            font-size: 0.72rem;
+            line-height: 1.7;
+        }
+
+        .alert.warn { background: rgba(248,113,113,0.06); border: 1px solid rgba(248,113,113,0.2); color: rgba(248,113,113,0.8); }
+        .alert.tip { background: rgba(103,232,249,0.04); border: 1px solid rgba(103,232,249,0.15); color: rgba(103,232,249,0.7); }
+        .alert.note { background: rgba(192,132,252,0.04); border: 1px solid rgba(192,132,252,0.15); color: rgba(192,132,252,0.7); }
+        .alert-icon { flex-shrink: 0; }
+
+        /* Table */
+        table { width: 100%; border-collapse: collapse; font-size: 0.72rem; margin-bottom: 12px; }
+        th { text-align: left; padding: 10px 14px; background: var(--surface2); border: 1px solid var(--border); font-size: 0.6rem; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); }
+        td { padding: 10px 14px; border: 1px solid var(--border); color: var(--text); vertical-align: top; }
+        td code { color: var(--primary); background: rgba(192,132,252,0.06); padding: 1px 5px; font-size: 0.7rem; }
+        tr:hover td { background: rgba(192,132,252,0.02); }
+
+        /* OS tabs */
+        .os-tabs { display: flex; gap: 2px; margin-bottom: 0; }
+
+        .os-tab {
+            padding: 10px 20px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-bottom: none;
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 1px;
+        }
+
+        .os-tab.active { background: #08080d; color: var(--primary); border-color: rgba(192,132,252,0.2); }
+
+        .os-content { display: none; }
+        .os-content.active { display: block; }
+
+        /* Two col */
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 12px; }
+
+        /* Checklist */
+        .checklist { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 32px; }
+
+        .check-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            font-size: 0.72rem;
+            color: var(--text-dim);
+        }
+
+        .check-icon {
+            width: 22px; height: 22px;
+            background: rgba(103,232,249,0.1);
+            border: 1px solid rgba(103,232,249,0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            color: var(--accent);
+            flex-shrink: 0;
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: rgba(192,132,252,0.15); }
+    </style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+    <div class="sidebar-header">
+        <div class="sidebar-logo">X11 FORWARDING</div>
+        <div class="sidebar-sub">Guía de Instalación</div>
+    </div>
+    <div class="sidebar-nav">
+        <div class="nav-section">Conceptos</div>
+        <a href="#s1" class="nav-item active"><span class="num">01</span> ¿Qué es X11?</a>
+        <a href="#s2" class="nav-item"><span class="num">02</span> ¿Cómo funciona?</a>
+
+        <div class="nav-section">Servidor CentOS</div>
+        <a href="#s3" class="nav-item"><span class="num">03</span> Instalar paquetes</a>
+        <a href="#s4" class="nav-item"><span class="num">04</span> Configurar SSH</a>
+        <a href="#s5" class="nav-item"><span class="num">05</span> Verificar servidor</a>
+
+        <div class="nav-section">Cliente</div>
+        <a href="#s6" class="nav-item"><span class="num">06</span> Desde Linux / Kali</a>
+        <a href="#s7" class="nav-item"><span class="num">07</span> Desde Windows</a>
+        <a href="#s8" class="nav-item"><span class="num">08</span> Desde macOS</a>
+
+        <div class="nav-section">Verificación</div>
+        <a href="#s9" class="nav-item"><span class="num">09</span> Pruebas</a>
+        <a href="#s10" class="nav-item"><span class="num">10</span> Seguridad y tips</a>
+    </div>
+    <div class="sidebar-footer">
+        <div class="status-pill">X11 ACTIVO</div>
+        <div>CentOS 10 · Apache 2.4</div>
+        <div style="margin-top:4px">misitio.local · SSH</div>
+    </div>
+</nav>
+
+<!-- MAIN -->
+<main class="main">
+
+    <!-- HERO -->
+    <div class="hero">
+        <div class="hero-badge">// Interfaz gráfica remota — CentOS 10</div>
+        <h1 class="hero-title">
+            <span class="p">X11</span><br>
+            <span class="w">Forwarding</span><br>
+            <span class="d">en CentOS 10</span>
+        </h1>
+        <p class="hero-desc">
+            Instalación y configuración completa de X11 Forwarding para ejecutar aplicaciones gráficas remotamente a través de SSH desde cualquier sistema operativo.
+        </p>
+        <div class="hero-meta">
+            <div class="meta-item">
+                <span class="meta-label">Servidor</span>
+                <span class="meta-value">CentOS 10</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Protocolo</span>
+                <span class="meta-value">SSH + X11</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Clientes</span>
+                <span class="meta-value">Linux · Windows · macOS</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Pasos</span>
+                <span class="meta-value">10 configuraciones</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="content">
+
+        <!-- 01: QUÉ ES X11 -->
+        <div class="chapter" id="s1">
+            <div class="chapter-header">
+                <div class="chapter-num">01</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Conceptos</div>
+                    <div class="chapter-title">¿Qué es X11?</div>
+                    <div class="chapter-desc">X11 (también llamado X Window System) es el sistema que usa Linux para mostrar interfaces gráficas. Permite que los programas muestren ventanas, botones y menús en pantalla.</div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge info">INFO</span>
+                        <span class="step-name">El problema que resuelve</span>
+                    </div>
+                    <span class="step-num">CONCEPTO 01</span>
+                </div>
+                <div class="step-body">
+                    <div class="step-explain">
+                        Cuando te conectas a un servidor Linux por SSH normalmente solo tienes acceso a texto. X11 Forwarding permite ejecutar programas gráficos en el servidor y verlos en tu pantalla local.
+                    </div>
+                    <div class="diagram">
+                        <div><span class="bad">❌ Sin X11 Forwarding</span></div>
+                        <div><span class="node">Diseñador</span> <span class="arrow">──── SSH ────►</span> <span class="node">CentOS</span> <span class="label">→ solo terminal de texto</span></div>
+                        <br>
+                        <div><span class="good">✅ Con X11 Forwarding</span></div>
+                        <div><span class="node">Diseñador</span> <span class="arrow">──── SSH+X11 ────►</span> <span class="node">CentOS</span> <span class="label">→ ejecuta GIMP, Firefox, gedit...</span></div>
+                        <div><span class="label">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;◄── ventana gráfica se muestra localmente</span></div>
+                    </div>
+                    <table>
+                        <tr><th>Sin X11</th><th>Con X11</th></tr>
+                        <tr><td>Solo comandos de texto</td><td>Aplicaciones con ventanas</td></tr>
+                        <tr><td>No se puede ver interfaz gráfica</td><td>GIMP, Firefox, gedit visibles</td></tr>
+                        <tr><td>El programa corre en el servidor</td><td>El programa corre en el servidor</td></tr>
+                        <tr><td>—</td><td>La pantalla se ve en el cliente</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 02: CÓMO FUNCIONA -->
+        <div class="chapter" id="s2">
+            <div class="chapter-header">
+                <div class="chapter-num">02</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Conceptos</div>
+                    <div class="chapter-title">¿Cómo funciona?</div>
+                    <div class="chapter-desc">X11 funciona con arquitectura cliente-servidor, pero al revés de lo que parece intuitivo.</div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge info">INFO</span>
+                        <span class="step-name">Arquitectura cliente-servidor de X11</span>
+                    </div>
+                    <span class="step-num">CONCEPTO 02</span>
+                </div>
+                <div class="step-body">
+                    <div class="diagram">
+                        <div><span class="node-green">Servidor X11</span> <span class="label">→ el que MUESTRA las ventanas → está en el PC del diseñador</span></div>
+                        <div><span class="node">Cliente X11</span>  <span class="label">→ el que EJECUTA los programas → está en CentOS</span></div>
+                        <br>
+                        <div><span class="label">Flujo:</span></div>
+                        <div><span class="node">CentOS</span> <span class="arrow">── ejecuta app ──►</span> <span class="label">envía gráficos por SSH</span> <span class="arrow">──►</span> <span class="node-green">Pantalla diseñador</span></div>
+                        <div><span class="node-green">Diseñador</span> <span class="arrow">── hace clic ──►</span> <span class="label">envía evento por SSH</span> <span class="arrow">──►</span> <span class="node">CentOS procesa</span></div>
+                    </div>
+                    <div class="alert note">
+                        <span class="alert-icon">📝</span>
+                        El procesamiento ocurre 100% en el servidor. El diseñador solo ve la pantalla y envía clics/teclado. El ancho de banda necesario es bajo porque solo se transmiten los gráficos, no los datos.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 03: INSTALAR PAQUETES -->
+        <div class="chapter" id="s3">
+            <div class="chapter-header">
+                <div class="chapter-num">03</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Servidor CentOS</div>
+                    <div class="chapter-title">Instalar paquetes X11</div>
+                    <div class="chapter-desc">Se instalan los paquetes mínimos necesarios para habilitar X11 en el servidor. No se instala un escritorio completo, solo el soporte para el forwarding.</div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">Instalar paquetes X11 en CentOS</span>
+                    </div>
+                    <span class="step-num">PASO 03</span>
+                </div>
+                <div class="step-body">
+                    <div class="step-explain">
+                        Solo se necesitan tres paquetes en el servidor. No es necesario instalar un entorno gráfico completo como GNOME o KDE.
+                    </div>
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="kw">sudo</span> dnf install -y \
+  xorg-x11-xauth \    <span class="cm"># Maneja autenticación del túnel X11 por SSH</span>
+  xorg-x11-fonts-* \  <span class="cm"># Fuentes necesarias para apps gráficas</span>
+  xorg-x11-utils \    <span class="cm"># Utilidades básicas de diagnóstico X11</span>
+  xterm               <span class="cm"># Terminal gráfica para verificar funcionamiento</span></pre>
+                    </div>
+                    <table>
+                        <tr><th>Paquete</th><th>Función</th><th>¿Obligatorio?</th></tr>
+                        <tr><td><code>xorg-x11-xauth</code></td><td>Autenticación del canal X11</td><td class="good" style="color:var(--accent)">Sí</td></tr>
+                        <tr><td><code>xorg-x11-fonts-*</code></td><td>Fuentes para aplicaciones gráficas</td><td class="good" style="color:var(--accent)">Recomendado</td></tr>
+                        <tr><td><code>xorg-x11-utils</code></td><td>Herramientas de diagnóstico</td><td style="color:rgba(255,255,255,0.4)">Opcional</td></tr>
+                        <tr><td><code>xterm</code></td><td>Terminal gráfica de prueba</td><td style="color:rgba(255,255,255,0.4)">Opcional</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 04: CONFIGURAR SSH -->
+        <div class="chapter" id="s4">
+            <div class="chapter-header">
+                <div class="chapter-num">04</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Servidor CentOS</div>
+                    <div class="chapter-title">Configurar SSH para X11</div>
+                    <div class="chapter-desc">Se habilita el X11 Forwarding en la configuración del servidor SSH. Por defecto viene desactivado en CentOS 10.</div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cfg">CONFIG</span>
+                        <span class="step-name">Editar /etc/ssh/sshd_config</span>
+                    </div>
+                    <span class="step-num">PASO 04</span>
+                </div>
+                <div class="step-body">
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="kw">sudo</span> nano /etc/ssh/sshd_config</pre>
+                    </div>
+                    <div class="file-block">
+                        <div class="file-header">
+                            <span>📄</span>
+                            <span class="file-path">/etc/ssh/sshd_config — parámetros X11</span>
+                        </div>
+                        <pre style="padding:20px;background:#08080d;font-size:0.78rem;line-height:1.8"><span class="sc">X11Forwarding</span>     <span class="st">yes</span>        <span class="cm"># Habilitar X11 Forwarding</span>
+<span class="sc">X11DisplayOffset</span>  <span class="nm">10</span>         <span class="cm"># Número de display X11 a usar</span>
+<span class="sc">X11UseLocalhost</span>   <span class="st">yes</span>        <span class="cm"># Bind X11 solo en localhost (más seguro)</span></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Guardar y reiniciar SSH</span>
+<span class="kw">sudo</span> systemctl restart sshd
+
+<span class="cm"># Verificar que el servicio sigue activo</span>
+<span class="kw">sudo</span> systemctl status sshd</pre>
+                    </div>
+                    <div class="alert warn">
+                        <span class="alert-icon">⚠️</span>
+                        Mantener <code>X11UseLocalhost yes</code> es importante por seguridad. Con <code>no</code> el display X11 queda expuesto en todas las interfaces de red.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 05: VERIFICAR SERVIDOR -->
+        <div class="chapter" id="s5">
+            <div class="chapter-header">
+                <div class="chapter-num">05</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Servidor CentOS</div>
+                    <div class="chapter-title">Verificar configuración del servidor</div>
+                    <div class="chapter-desc">Confirmar que SSH tiene X11 habilitado antes de intentar conectarse desde el cliente.</div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">Verificar parámetros SSH activos</span>
+                    </div>
+                    <span class="step-num">PASO 05</span>
+                </div>
+                <div class="step-body">
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Verificar que X11 está habilitado en la configuración activa</span>
+<span class="kw">sudo</span> sshd -T | grep -i x11
+
+<span class="cm"># Debe mostrar:</span>
+<span class="cm"># x11forwarding yes</span>
+<span class="cm"># x11displayoffset 10</span>
+<span class="cm"># x11uselocalhost yes</span>
+
+<span class="cm"># Verificar que xauth está instalado</span>
+<span class="kw">which</span> xauth
+<span class="cm"># Debe mostrar: /usr/bin/xauth</span></pre>
+                    </div>
+                    <div class="alert tip">
+                        <span class="alert-icon">💡</span>
+                        Si <code>xauth</code> no aparece instalado, X11 Forwarding no funcionará aunque SSH esté configurado. Asegúrate de haber instalado el paquete <code>xorg-x11-xauth</code>.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 06: CLIENTE LINUX -->
+        <div class="chapter" id="s6">
+            <div class="chapter-header">
+                <div class="chapter-num">06</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Cliente</div>
+                    <div class="chapter-title">Conectarse desde Linux / Kali</div>
+                    <div class="chapter-desc">Linux ya incluye soporte X11 nativo. Solo se necesita agregar un flag al comando SSH.</div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">SSH con X11 desde Linux</span>
+                    </div>
+                    <span class="step-num">PASO 06</span>
+                </div>
+                <div class="step-body">
+                    <div class="step-explain">
+                        El flag <code>-X</code> habilita X11 Forwarding con restricciones de seguridad. El flag <code>-Y</code> confía completamente en el cliente (más permisos, menos seguro). Para el laboratorio cualquiera funciona.
+                    </div>
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Conectarse con X11 habilitado (modo seguro)</span>
+<span class="kw">ssh</span> -X usuario@192.168.X.X
+
+<span class="cm"># O con modo extendido (más compatibilidad)</span>
+<span class="kw">ssh</span> -Y usuario@192.168.X.X
+
+<span class="cm"># Una vez conectado, verificar la variable DISPLAY</span>
+<span class="kw">echo</span> $DISPLAY
+<span class="cm"># Debe mostrar algo como: localhost:10.0</span>
+
+<span class="cm"># Probar abriendo una app gráfica</span>
+<span class="kw">xterm</span> &amp;
+<span class="kw">xclock</span> &amp;</pre>
+                    </div>
+                    <table>
+                        <tr><th>Flag</th><th>Modo</th><th>Seguridad</th><th>Uso recomendado</th></tr>
+                        <tr><td><code>-X</code></td><td>Seguro</td><td class="good" style="color:var(--accent)">Alta</td><td>Producción / red externa</td></tr>
+                        <tr><td><code>-Y</code></td><td>Confianza total</td><td style="color:#f87171">Media</td><td>Laboratorio / red local</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 07: CLIENTE WINDOWS -->
+        <div class="chapter" id="s7">
+            <div class="chapter-header">
+                <div class="chapter-num">07</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Cliente</div>
+                    <div class="chapter-title">Conectarse desde Windows</div>
+                    <div class="chapter-desc">Windows no tiene X11 de forma nativa. Se necesita instalar un servidor X11 externo. La opción más simple es MobaXterm.</div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge info">INFO</span>
+                        <span class="step-name">Opciones de software X11 para Windows</span>
+                    </div>
+                    <span class="step-num">PASO 07</span>
+                </div>
+                <div class="step-body">
+                    <table>
+                        <tr><th>Software</th><th>Incluye SSH</th><th>Dificultad</th><th>Precio</th></tr>
+                        <tr><td><code>MobaXterm</code></td><td>✅ Sí</td><td>Muy fácil</td><td>Gratis (básico)</td></tr>
+                        <tr><td><code>VcXsrv</code></td><td>❌ No</td><td>Media</td><td>Gratis</td></tr>
+                        <tr><td><code>Xming</code></td><td>❌ No</td><td>Media</td><td>Gratis</td></tr>
+                        <tr><td><code>X410</code></td><td>❌ No</td><td>Fácil</td><td>De pago</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">Opción A — MobaXterm (recomendado)</span>
+                    </div>
+                    <span class="step-num">PASO 07A</span>
+                </div>
+                <div class="step-body">
+                    <div class="step-explain">
+                        MobaXterm incluye SSH y servidor X11 integrados. No requiere configuración adicional — X11 Forwarding está activo por defecto.
+                    </div>
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">pasos</span></div>
+                        <pre><span class="nm">1.</span> Descargar MobaXterm desde: <span class="st">mobaxterm.mobatek.net</span>
+<span class="nm">2.</span> Instalar y abrir MobaXterm
+<span class="nm">3.</span> Session → SSH
+<span class="nm">4.</span> Remote host: <span class="st">192.168.X.X</span>
+<span class="nm">5.</span> Username: <span class="st">tuusuario</span>
+<span class="nm">6.</span> En Advanced SSH settings:
+   ✅ X11-Forwarding (ya viene marcado)
+<span class="nm">7.</span> Click OK y conectar</pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">Opción B — VcXsrv + PuTTY</span>
+                    </div>
+                    <span class="step-num">PASO 07B</span>
+                </div>
+                <div class="step-body">
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">pasos</span></div>
+                        <pre><span class="cm"># Paso 1: Instalar VcXsrv</span>
+Descargar desde: <span class="st">sourceforge.net/projects/vcxsrv</span>
+Instalar y ejecutar XLaunch:
+  - Multiple windows
+  - Start no client
+  - ✅ Disable access control
+  - Finish
+
+<span class="cm"># Paso 2: Configurar PuTTY</span>
+PuTTY → Connection → SSH → X11:
+  ✅ Enable X11 forwarding
+  X display location: <span class="st">localhost:0</span>
+
+<span class="cm"># Paso 3: Conectar y verificar</span>
+echo $DISPLAY   <span class="cm"># debe mostrar localhost:10.0</span></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 08: CLIENTE MACOS -->
+        <div class="chapter" id="s8">
+            <div class="chapter-header">
+                <div class="chapter-num">08</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Cliente</div>
+                    <div class="chapter-title">Conectarse desde macOS</div>
+                    <div class="chapter-desc">macOS necesita XQuartz como servidor X11. Antes venía incluido pero Apple lo eliminó en OS X Mountain Lion.</div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">Instalar XQuartz y conectar</span>
+                    </div>
+                    <span class="step-num">PASO 08</span>
+                </div>
+                <div class="step-body">
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Instalar XQuartz con Homebrew</span>
+<span class="kw">brew</span> install --cask xquartz
+
+<span class="cm"># O descargar desde: xquartz.macosforge.org</span>
+
+<span class="cm"># Reiniciar macOS después de instalar XQuartz</span>
+
+<span class="cm"># Conectar al servidor con X11</span>
+<span class="kw">ssh</span> -X usuario@192.168.X.X
+
+<span class="cm"># Verificar</span>
+<span class="kw">echo</span> $DISPLAY</pre>
+                    </div>
+                    <div class="alert tip">
+                        <span class="alert-icon">💡</span>
+                        En macOS es necesario reiniciar después de instalar XQuartz para que la variable de entorno <code>DISPLAY</code> se configure correctamente.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 09: PRUEBAS -->
+        <div class="chapter" id="s9">
+            <div class="chapter-header">
+                <div class="chapter-num">09</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Verificación</div>
+                    <div class="chapter-title">Pruebas de funcionamiento</div>
+                    <div class="chapter-desc">Comandos para verificar que X11 Forwarding está funcionando correctamente desde el cliente.</div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">Verificar y probar aplicaciones gráficas</span>
+                    </div>
+                    <span class="step-num">PASO 09</span>
+                </div>
+                <div class="step-body">
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Una vez conectado por SSH -X, verificar DISPLAY</span>
+<span class="kw">echo</span> $DISPLAY
+<span class="cm"># Esperado: localhost:10.0 (o similar)</span>
+
+<span class="cm"># Prueba 1: Terminal gráfica (más simple)</span>
+<span class="kw">xterm</span> &amp;
+
+<span class="cm"># Prueba 2: Reloj gráfico</span>
+<span class="kw">xclock</span> &amp;
+
+<span class="cm"># Prueba 3: Información del display</span>
+<span class="kw">xdpyinfo</span> | head -20
+
+<span class="cm"># Instalar y probar editor gráfico</span>
+<span class="kw">sudo</span> dnf install -y gedit
+<span class="kw">gedit</span> &amp;
+
+<span class="cm"># Instalar y probar GIMP</span>
+<span class="kw">sudo</span> dnf install -y gimp
+<span class="kw">gimp</span> &amp;</pre>
+                    </div>
+                    <div class="alert warn">
+                        <span class="alert-icon">⚠️</span>
+                        Si <code>$DISPLAY</code> está vacío, X11 Forwarding no está activo. Verifica que usaste <code>ssh -X</code> o <code>ssh -Y</code> al conectarte.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 10: SEGURIDAD -->
+        <div class="chapter" id="s10">
+            <div class="chapter-header">
+                <div class="chapter-num">10</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Seguridad y Tips</div>
+                    <div class="chapter-title">Seguridad y recomendaciones</div>
+                    <div class="chapter-desc">Consideraciones importantes para usar X11 Forwarding de forma segura y eficiente.</div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge info">INFO</span>
+                        <span class="step-name">Consideraciones de seguridad</span>
+                    </div>
+                    <span class="step-num">PASO 10</span>
+                </div>
+                <div class="step-body">
+                    <table>
+                        <tr><th>Aspecto</th><th>Recomendación</th></tr>
+                        <tr><td>Usar <code>-X</code> vs <code>-Y</code></td><td><code>-X</code> es más seguro. Usar <code>-Y</code> solo en red local de confianza</td></tr>
+                        <tr><td>X11UseLocalhost</td><td>Mantener en <code>yes</code> para que el display no quede expuesto</td></tr>
+                        <tr><td>Red de uso</td><td>Ideal para red local. No usar sobre internet sin VPN</td></tr>
+                        <tr><td>Firewall</td><td>No requiere puertos extra. Todo va por SSH (puerto 22)</td></tr>
+                        <tr><td>Rendimiento</td><td>Lento en redes con alta latencia. Mejor en red local</td></tr>
+                    </table>
+
+                    <div class="alert note" style="margin-top:16px">
+                        <span class="alert-icon">📝</span>
+                        Para producción con muchos usuarios conectándose remotamente, considera alternativas como <code>xrdp</code> (escritorio remoto RDP) o <code>VNC</code> que son más eficientes para uso intensivo.
+                    </div>
+
+                    <h3 style="font-family:'Syne',sans-serif;font-size:1rem;letter-spacing:2px;color:var(--text);margin:24px 0 16px;text-transform:uppercase;">Checklist de verificación</h3>
+                    <div class="checklist">
+                        <div class="check-item"><div class="check-icon">✓</div> xorg-x11-xauth instalado en CentOS</div>
+                        <div class="check-item"><div class="check-icon">✓</div> X11Forwarding yes en sshd_config</div>
+                        <div class="check-item"><div class="check-icon">✓</div> SSH reiniciado después del cambio</div>
+                        <div class="check-item"><div class="check-icon">✓</div> Conectado con ssh -X o ssh -Y</div>
+                        <div class="check-item"><div class="check-icon">✓</div> Variable $DISPLAY muestra valor</div>
+                        <div class="check-item"><div class="check-icon">✓</div> xterm abre ventana gráfica correctamente</div>
+                        <div class="check-item"><div class="check-icon">✓</div> Cliente X11 instalado (Windows/macOS)</div>
+                        <div class="check-item"><div class="check-icon">✓</div> Firewall no requiere cambios adicionales</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</main>
+
+<script>
+    function copyCode(btn) {
+        const pre = btn.closest('.code-block').querySelector('pre');
+        navigator.clipboard.writeText(pre.innerText).then(() => {
+            btn.textContent = 'COPIADO ✓';
+            btn.classList.add('copied');
+            setTimeout(() => { btn.textContent = 'COPIAR'; btn.classList.remove('copied'); }, 2000);
+        });
+    }
+
+    const chapters = document.querySelectorAll('.chapter');
+    const navItems = document.querySelectorAll('.nav-item');
+
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const id = entry.target.id;
+                navItems.forEach(item => {
+                    item.classList.remove('active');
+                    if (item.getAttribute('href') === '#' + id) item.classList.add('active');
+                });
+            }
+        });
+    }, { threshold: 0.3 });
+
+    chapters.forEach(ch => observer.observe(ch));
+</script>
+</body>
+</html>
