@@ -1,0 +1,1735 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GUÍA CENTOS 10 — Servidor Web Completo</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&family=Syne:wght@400;700;800&family=Syne+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0c0c0f;
+            --surface: #13131a;
+            --surface2: #1a1a24;
+            --border: rgba(255,255,255,0.06);
+            --primary: #e2ff5d;
+            --secondary: #ff6b35;
+            --accent: #5dffce;
+            --muted: rgba(226,255,93,0.35);
+            --text: rgba(255,255,255,0.85);
+            --text-dim: rgba(255,255,255,0.4);
+            --glow: 0 0 30px rgba(226,255,93,0.2);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+
+        /* Noise texture overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0.4;
+        }
+
+        /* ── SIDEBAR NAV ── */
+        .sidebar {
+            position: fixed;
+            left: 0; top: 0; bottom: 0;
+            width: 260px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+            overflow-y: auto;
+        }
+
+        .sidebar::-webkit-scrollbar { width: 4px; }
+        .sidebar::-webkit-scrollbar-track { background: transparent; }
+        .sidebar::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 2px; }
+
+        .sidebar-header {
+            padding: 32px 24px 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-logo {
+            font-family: 'Syne', sans-serif;
+            font-weight: 800;
+            font-size: 1.1rem;
+            color: var(--primary);
+            letter-spacing: 1px;
+            text-shadow: var(--glow);
+            margin-bottom: 6px;
+        }
+
+        .sidebar-sub {
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .sidebar-nav {
+            padding: 16px 0;
+            flex: 1;
+        }
+
+        .nav-section {
+            padding: 8px 24px 4px;
+            font-size: 0.6rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--secondary);
+            margin-top: 8px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 24px;
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 0.72rem;
+            letter-spacing: 0.5px;
+            transition: color 0.2s, background 0.2s;
+            border-left: 2px solid transparent;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            color: var(--primary);
+            background: rgba(226,255,93,0.04);
+            border-left-color: var(--primary);
+        }
+
+        .nav-item .num {
+            color: rgba(226,255,93,0.3);
+            font-size: 0.6rem;
+            min-width: 20px;
+        }
+
+        .sidebar-footer {
+            padding: 20px 24px;
+            border-top: 1px solid var(--border);
+            font-size: 0.62rem;
+            color: var(--text-dim);
+            line-height: 1.8;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(93,255,206,0.08);
+            border: 1px solid rgba(93,255,206,0.2);
+            padding: 4px 10px;
+            border-radius: 20px;
+            color: var(--accent);
+            font-size: 0.6rem;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+
+        .status-pill::before {
+            content: '';
+            width: 6px; height: 6px;
+            background: var(--accent);
+            border-radius: 50%;
+            animation: blink 2s infinite;
+        }
+
+        @keyframes blink {
+            0%,100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* ── MAIN CONTENT ── */
+        .main {
+            margin-left: 260px;
+            min-height: 100vh;
+        }
+
+        /* Hero */
+        .hero {
+            padding: 80px 80px 60px;
+            border-bottom: 1px solid var(--border);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::after {
+            content: 'CENTOS';
+            position: absolute;
+            right: -40px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-family: 'Syne', sans-serif;
+            font-weight: 800;
+            font-size: 160px;
+            color: transparent;
+            -webkit-text-stroke: 1px rgba(226,255,93,0.05);
+            pointer-events: none;
+            user-select: none;
+            letter-spacing: -8px;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,107,53,0.1);
+            border: 1px solid rgba(255,107,53,0.3);
+            padding: 6px 14px;
+            font-size: 0.65rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--secondary);
+            margin-bottom: 28px;
+        }
+
+        .hero-title {
+            font-family: 'Syne', sans-serif;
+            font-weight: 800;
+            font-size: clamp(2.5rem, 5vw, 4.5rem);
+            line-height: 1;
+            letter-spacing: -2px;
+            margin-bottom: 20px;
+        }
+
+        .hero-title .y { color: var(--primary); }
+        .hero-title .w { color: var(--text); }
+        .hero-title .d { color: var(--text-dim); }
+
+        .hero-desc {
+            max-width: 600px;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            line-height: 1.9;
+            margin-bottom: 40px;
+        }
+
+        .hero-meta {
+            display: flex;
+            gap: 32px;
+        }
+
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .meta-label {
+            font-size: 0.6rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+        }
+
+        .meta-value {
+            font-size: 0.8rem;
+            color: var(--accent);
+        }
+
+        /* Progress bar */
+        .progress-bar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 20px 80px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+        }
+
+        .progress-bar::-webkit-scrollbar { height: 0; }
+
+        .prog-step {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+            font-size: 0.65rem;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .prog-step:hover { color: var(--primary); }
+
+        .prog-step .circle {
+            width: 24px; height: 24px;
+            border: 1px solid rgba(226,255,93,0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6rem;
+            color: rgba(226,255,93,0.4);
+            flex-shrink: 0;
+        }
+
+        .prog-step.done .circle {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: var(--bg);
+            font-weight: 700;
+        }
+
+        .prog-sep {
+            width: 24px; height: 1px;
+            background: var(--border);
+            flex-shrink: 0;
+        }
+
+        /* Sections */
+        .content {
+            padding: 0 80px 80px;
+        }
+
+        .chapter {
+            padding-top: 80px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 60px;
+        }
+
+        .chapter:last-child { border-bottom: none; }
+
+        .chapter-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 24px;
+            margin-bottom: 48px;
+        }
+
+        .chapter-num {
+            font-family: 'Syne', sans-serif;
+            font-size: 4rem;
+            font-weight: 800;
+            color: rgba(226,255,93,0.08);
+            line-height: 1;
+            flex-shrink: 0;
+            margin-top: -8px;
+        }
+
+        .chapter-info {}
+
+        .chapter-tag {
+            font-size: 0.6rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--secondary);
+            margin-bottom: 8px;
+        }
+
+        .chapter-title {
+            font-family: 'Syne', sans-serif;
+            font-weight: 700;
+            font-size: 1.6rem;
+            color: var(--text);
+            margin-bottom: 10px;
+        }
+
+        .chapter-desc {
+            font-size: 0.78rem;
+            color: var(--text-dim);
+            max-width: 600px;
+            line-height: 1.9;
+        }
+
+        /* Step */
+        .step {
+            margin-bottom: 36px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            overflow: hidden;
+            position: relative;
+            transition: border-color 0.3s;
+        }
+
+        .step:hover { border-color: rgba(226,255,93,0.2); }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface2);
+        }
+
+        .step-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .step-badge {
+            font-size: 0.6rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            border: 1px solid;
+        }
+
+        .step-badge.cmd { color: var(--primary); border-color: rgba(226,255,93,0.3); background: rgba(226,255,93,0.05); }
+        .step-badge.cfg { color: var(--accent); border-color: rgba(93,255,206,0.3); background: rgba(93,255,206,0.05); }
+        .step-badge.info { color: var(--secondary); border-color: rgba(255,107,53,0.3); background: rgba(255,107,53,0.05); }
+
+        .step-name {
+            font-size: 0.8rem;
+            color: var(--text);
+            letter-spacing: 0.5px;
+        }
+
+        .step-num {
+            font-size: 0.6rem;
+            color: var(--text-dim);
+            letter-spacing: 1px;
+        }
+
+        .step-body {
+            padding: 20px;
+        }
+
+        .step-explain {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            line-height: 1.9;
+            margin-bottom: 16px;
+            padding: 12px 16px;
+            border-left: 2px solid rgba(255,107,53,0.4);
+            background: rgba(255,107,53,0.03);
+        }
+
+        /* Code block */
+        .code-block {
+            background: #08080d;
+            border: 1px solid rgba(255,255,255,0.05);
+            position: relative;
+            margin-bottom: 12px;
+        }
+
+        .code-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            background: rgba(255,255,255,0.02);
+        }
+
+        .code-lang {
+            font-size: 0.6rem;
+            letter-spacing: 2px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+        }
+
+        .copy-btn {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.6rem;
+            letter-spacing: 1px;
+            padding: 4px 10px;
+            background: transparent;
+            border: 1px solid rgba(226,255,93,0.2);
+            color: var(--primary);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .copy-btn:hover { background: rgba(226,255,93,0.08); }
+        .copy-btn.copied { color: var(--accent); border-color: rgba(93,255,206,0.3); }
+
+        pre {
+            padding: 20px;
+            overflow-x: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            line-height: 1.8;
+        }
+
+        pre::-webkit-scrollbar { height: 4px; }
+        pre::-webkit-scrollbar-track { background: transparent; }
+        pre::-webkit-scrollbar-thumb { background: var(--muted); }
+
+        .kw { color: var(--primary); }         /* keywords/commands */
+        .cm { color: rgba(255,255,255,0.25); } /* comments */
+        .st { color: var(--accent); }           /* strings/values */
+        .sc { color: var(--secondary); }        /* section headers */
+        .nm { color: #c792ea; }                 /* numbers */
+
+        /* Alert box */
+        .alert {
+            display: flex;
+            gap: 12px;
+            padding: 12px 16px;
+            margin-bottom: 12px;
+            font-size: 0.72rem;
+            line-height: 1.7;
+        }
+
+        .alert.warn {
+            background: rgba(255,107,53,0.06);
+            border: 1px solid rgba(255,107,53,0.2);
+            color: rgba(255,107,53,0.8);
+        }
+
+        .alert.tip {
+            background: rgba(93,255,206,0.04);
+            border: 1px solid rgba(93,255,206,0.15);
+            color: rgba(93,255,206,0.7);
+        }
+
+        .alert.note {
+            background: rgba(226,255,93,0.04);
+            border: 1px solid rgba(226,255,93,0.15);
+            color: rgba(226,255,93,0.7);
+        }
+
+        .alert-icon { flex-shrink: 0; font-size: 0.9rem; }
+
+        /* File content block */
+        .file-block {
+            background: #08080d;
+            border: 1px solid rgba(255,255,255,0.05);
+            margin-bottom: 12px;
+        }
+
+        .file-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            background: rgba(255,255,255,0.02);
+        }
+
+        .file-icon { font-size: 0.8rem; }
+
+        .file-path {
+            font-size: 0.68rem;
+            color: var(--accent);
+            letter-spacing: 0.5px;
+        }
+
+        /* Two column layout */
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 12px;
+        }
+
+        /* Architecture diagram */
+        .arch-box {
+            background: #08080d;
+            border: 1px solid rgba(226,255,93,0.1);
+            padding: 32px;
+            font-size: 0.75rem;
+            line-height: 2.2;
+            color: rgba(255,255,255,0.6);
+            margin-bottom: 12px;
+        }
+
+        .arch-box .node {
+            display: inline-block;
+            padding: 2px 10px;
+            border: 1px solid rgba(226,255,93,0.3);
+            color: var(--primary);
+            font-size: 0.7rem;
+        }
+
+        .arch-box .arrow { color: rgba(226,255,93,0.3); }
+        .arch-box .label { color: var(--text-dim); font-size: 0.65rem; }
+
+        /* Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.72rem;
+            margin-bottom: 12px;
+        }
+
+        th {
+            text-align: left;
+            padding: 10px 14px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            font-size: 0.6rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+        }
+
+        td {
+            padding: 10px 14px;
+            border: 1px solid var(--border);
+            color: var(--text);
+            vertical-align: top;
+        }
+
+        td code {
+            color: var(--primary);
+            background: rgba(226,255,93,0.06);
+            padding: 1px 5px;
+            font-size: 0.7rem;
+        }
+
+        td.good { color: var(--accent); }
+        td.bad { color: var(--secondary); }
+
+        tr:hover td { background: rgba(226,255,93,0.02); }
+
+        /* Summary checklist */
+        .checklist {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 40px;
+        }
+
+        .check-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            transition: border-color 0.2s;
+        }
+
+        .check-item:hover { border-color: rgba(226,255,93,0.2); }
+
+        .check-icon {
+            width: 22px; height: 22px;
+            background: rgba(93,255,206,0.1);
+            border: 1px solid rgba(93,255,206,0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            color: var(--accent);
+            flex-shrink: 0;
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .chapter { animation: fadeIn 0.5s ease both; }
+
+        /* Scrollbar global */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: rgba(226,255,93,0.15); }
+    </style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+    <div class="sidebar-header">
+        <div class="sidebar-logo">CENTOS 10</div>
+        <div class="sidebar-sub">Guía de Configuración</div>
+    </div>
+    <div class="sidebar-nav">
+        <div class="nav-section">Sistema Base</div>
+        <a href="#s1" class="nav-item active"><span class="num">01</span> Actualización del sistema</a>
+        <a href="#s2" class="nav-item"><span class="num">02</span> Hostname</a>
+        <a href="#s3" class="nav-item"><span class="num">03</span> Zona horaria</a>
+        <a href="#s4" class="nav-item"><span class="num">04</span> Usuario administrador</a>
+        <a href="#s5" class="nav-item"><span class="num">05</span> SSH seguro</a>
+
+        <div class="nav-section">Red y Seguridad</div>
+        <a href="#s6" class="nav-item"><span class="num">06</span> Firewalld</a>
+        <a href="#s7" class="nav-item"><span class="num">07</span> SELinux</a>
+        <a href="#s8" class="nav-item"><span class="num">08</span> NTP / Chrony</a>
+        <a href="#s9" class="nav-item"><span class="num">09</span> Herramientas básicas</a>
+        <a href="#s10" class="nav-item"><span class="num">10</span> Updates automáticos</a>
+
+        <div class="nav-section">Servidor Web</div>
+        <a href="#s11" class="nav-item"><span class="num">11</span> Instalación Apache</a>
+        <a href="#s12" class="nav-item"><span class="num">12</span> Configurar sitio</a>
+        <a href="#s13" class="nav-item"><span class="num">13</span> VirtualHost</a>
+        <a href="#s14" class="nav-item"><span class="num">14</span> Permisos y SELinux</a>
+
+        <div class="nav-section">SSL / HTTPS</div>
+        <a href="#s15" class="nav-item"><span class="num">15</span> Instalar mod_ssl</a>
+        <a href="#s16" class="nav-item"><span class="num">16</span> Generar certificado</a>
+        <a href="#s17" class="nav-item"><span class="num">17</span> VirtualHost HTTPS</a>
+        <a href="#s18" class="nav-item"><span class="num">18</span> Verificación final</a>
+
+        <div class="nav-section">Red Local</div>
+        <a href="#s19" class="nav-item"><span class="num">19</span> Configurar /etc/hosts</a>
+        <a href="#s20" class="nav-item"><span class="num">20</span> Resumen del stack</a>
+    </div>
+    <div class="sidebar-footer">
+        <div class="status-pill">SISTEMA ACTIVO</div>
+        <div>Apache 2.4 · SSL · Firewalld</div>
+        <div style="margin-top:4px">misitio.local · CentOS 10</div>
+    </div>
+</nav>
+
+<!-- MAIN -->
+<main class="main">
+
+    <!-- HERO -->
+    <div class="hero">
+        <div class="hero-badge">// Documentación técnica — Laboratorio personal</div>
+        <h1 class="hero-title">
+            <span class="y">Servidor Web</span><br>
+            <span class="w">Completo en</span><br>
+            <span class="d">CentOS 10</span>
+        </h1>
+        <p class="hero-desc">
+            Guía paso a paso para configurar un servidor web Apache con SSL, firewall, SELinux y DNS local. Todos los comandos probados y explicados.
+        </p>
+        <div class="hero-meta">
+            <div class="meta-item">
+                <span class="meta-label">Sistema</span>
+                <span class="meta-value">CentOS 10</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Servidor</span>
+                <span class="meta-value">Apache 2.4</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Seguridad</span>
+                <span class="meta-value">SSL + Firewalld + SELinux</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Pasos</span>
+                <span class="meta-value">20 configuraciones</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- PROGRESS -->
+    <div class="progress-bar">
+        <div class="prog-step done"><div class="circle">✓</div> Sistema base</div>
+        <div class="prog-sep"></div>
+        <div class="prog-step done"><div class="circle">✓</div> Red y seguridad</div>
+        <div class="prog-sep"></div>
+        <div class="prog-step done"><div class="circle">✓</div> Apache instalado</div>
+        <div class="prog-sep"></div>
+        <div class="prog-step done"><div class="circle">✓</div> Sitio configurado</div>
+        <div class="prog-sep"></div>
+        <div class="prog-step done"><div class="circle">✓</div> SSL activo</div>
+        <div class="prog-sep"></div>
+        <div class="prog-step done"><div class="circle">✓</div> DNS local</div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content">
+
+        <!-- ═══════════════════════════════════════ -->
+        <!-- CAPÍTULO 1: SISTEMA BASE -->
+        <!-- ═══════════════════════════════════════ -->
+        <div class="chapter" id="s1">
+            <div class="chapter-header">
+                <div class="chapter-num">01</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Sistema Base</div>
+                    <div class="chapter-title">Actualización del sistema</div>
+                    <div class="chapter-desc">Lo primero siempre es actualizar el sistema para aplicar todos los parches de seguridad disponibles antes de instalar cualquier servicio.</div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">Actualizar paquetes del sistema</span>
+                    </div>
+                    <span class="step-num">PASO 01</span>
+                </div>
+                <div class="step-body">
+                    <div class="step-explain">
+                        <code>dnf</code> es el gestor de paquetes de CentOS 10 (sucesor de yum). Con <code>update</code> descarga e instala las versiones más recientes de todo lo instalado. La flag <code>-y</code> responde "sí" automáticamente a todas las confirmaciones.
+                    </div>
+                    <div class="code-block">
+                        <div class="code-top">
+                            <span class="code-lang">bash</span>
+                            <button class="copy-btn" onclick="copyCode(this)">COPIAR</button>
+                        </div>
+                        <pre><span class="kw">sudo</span> dnf <span class="st">update</span> -y <span class="cm"># Actualiza la lista de paquetes e instala updates</span>
+<span class="kw">sudo</span> dnf <span class="st">upgrade</span> -y <span class="cm"># Aplica actualizaciones mayores si las hay</span></pre>
+                    </div>
+                    <div class="alert tip">
+                        <span class="alert-icon">💡</span>
+                        Después de una actualización mayor, es recomendable reiniciar el sistema con <code>sudo reboot</code> para aplicar cambios en el kernel.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 2: HOSTNAME -->
+        <div class="chapter" id="s2">
+            <div class="chapter-header">
+                <div class="chapter-num">02</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Sistema Base</div>
+                    <div class="chapter-title">Nombre del servidor (Hostname)</div>
+                    <div class="chapter-desc">El hostname identifica al servidor en la red. Aparece en el prompt de la terminal y en registros de log.</div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">Configurar hostname permanente</span>
+                    </div>
+                    <span class="step-num">PASO 02</span>
+                </div>
+                <div class="step-body">
+                    <div class="step-explain">
+                        <code>hostnamectl</code> es la herramienta de systemd para gestionar el nombre del host. El cambio es permanente y no requiere reinicio.
+                    </div>
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Establecer el nombre del servidor</span>
+<span class="kw">sudo</span> hostnamectl set-hostname mi-servidor
+
+<span class="cm"># Verificar el cambio</span>
+<span class="kw">hostnamectl</span> status</pre>
+                    </div>
+                    <div class="alert note">
+                        <span class="alert-icon">📝</span>
+                        El nuevo hostname aparecerá en el prompt: <code>[root@mi-servidor ~]$</code>. Si no cambia de inmediato, cierra y abre una nueva sesión de terminal.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 3: TIMEZONE -->
+        <div class="chapter" id="s3">
+            <div class="chapter-header">
+                <div class="chapter-num">03</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Sistema Base</div>
+                    <div class="chapter-title">Zona horaria</div>
+                    <div class="chapter-desc">La hora correcta es crítica para los logs del sistema, certificados SSL, autenticación y sincronización de servicios.</div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">Configurar zona horaria Chile</span>
+                    </div>
+                    <span class="step-num">PASO 03</span>
+                </div>
+                <div class="step-body">
+                    <div class="step-explain">
+                        <code>timedatectl</code> gestiona la hora del sistema. La zona <code>America/Santiago</code> corresponde a Chile Continental (UTC-4 en verano, UTC-3 en invierno con horario de verano).
+                    </div>
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Ver todas las zonas disponibles para América</span>
+<span class="kw">timedatectl</span> list-timezones | grep America
+
+<span class="cm"># Establecer zona horaria de Chile</span>
+<span class="kw">sudo</span> timedatectl set-timezone America/Santiago
+
+<span class="cm"># Verificar configuración actual</span>
+<span class="kw">timedatectl</span></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 4: USUARIO -->
+        <div class="chapter" id="s4">
+            <div class="chapter-header">
+                <div class="chapter-num">04</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Sistema Base</div>
+                    <div class="chapter-title">Usuario administrador</div>
+                    <div class="chapter-desc">Nunca se debe trabajar siempre como root. Se crea un usuario normal con permisos de sudo para administrar el servidor de forma más segura.</div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">Crear usuario con privilegios sudo</span>
+                    </div>
+                    <span class="step-num">PASO 04</span>
+                </div>
+                <div class="step-body">
+                    <div class="step-explain">
+                        En CentOS el grupo <code>wheel</code> equivale a sudoers — cualquier usuario en ese grupo puede ejecutar comandos como root usando <code>sudo</code>.
+                    </div>
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Crear usuario con directorio home y shell bash</span>
+<span class="kw">sudo</span> useradd -m -s /bin/bash tuusuario
+
+<span class="cm"># Asignar contraseña</span>
+<span class="kw">sudo</span> passwd tuusuario
+
+<span class="cm"># Agregar al grupo wheel (sudo)</span>
+<span class="kw">sudo</span> usermod -aG wheel tuusuario
+
+<span class="cm"># Verificar que está en el grupo</span>
+<span class="kw">groups</span> tuusuario</pre>
+                    </div>
+                    <div class="alert warn">
+                        <span class="alert-icon">⚠️</span>
+                        Reemplaza <code>tuusuario</code> con el nombre real que quieres usar. Usa una contraseña fuerte: mínimo 12 caracteres con mayúsculas, números y símbolos.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 5: SSH -->
+        <div class="chapter" id="s5">
+            <div class="chapter-header">
+                <div class="chapter-num">05</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Sistema Base</div>
+                    <div class="chapter-title">SSH seguro</div>
+                    <div class="chapter-desc">SSH es el protocolo para acceder remotamente al servidor. Configurarlo correctamente es una de las medidas de seguridad más importantes.</div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cfg">CONFIG</span>
+                        <span class="step-name">Configurar /etc/ssh/sshd_config</span>
+                    </div>
+                    <span class="step-num">PASO 05</span>
+                </div>
+                <div class="step-body">
+                    <div class="step-explain">
+                        El archivo <code>sshd_config</code> controla el comportamiento del servidor SSH. Desactivar el login directo como root es lo mínimo indispensable.
+                    </div>
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="kw">sudo</span> nano /etc/ssh/sshd_config</pre>
+                    </div>
+                    <div class="file-block">
+                        <div class="file-header">
+                            <span class="file-icon">📄</span>
+                            <span class="file-path">/etc/ssh/sshd_config — parámetros a modificar</span>
+                        </div>
+                        <pre style="padding:20px;background:#08080d;font-size:0.78rem;line-height:1.8"><span class="sc">PermitRootLogin</span>         <span class="st">no</span>       <span class="cm"># Deshabilitar login directo como root</span>
+<span class="sc">PasswordAuthentication</span>  <span class="st">yes</span>      <span class="cm"># Mantener por ahora, luego usar llaves</span>
+<span class="sc">Port</span>                    <span class="nm">22</span>       <span class="cm"># Puerto estándar SSH</span>
+<span class="sc">MaxAuthTries</span>            <span class="nm">3</span>        <span class="cm"># Máximo 3 intentos de contraseña</span>
+<span class="sc">LoginGraceTime</span>          <span class="nm">30</span>       <span class="cm"># 30 segundos para autenticarse</span></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Reiniciar SSH para aplicar cambios</span>
+<span class="kw">sudo</span> systemctl restart sshd
+
+<span class="cm"># Verificar que está activo</span>
+<span class="kw">sudo</span> systemctl status sshd</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 6: FIREWALLD -->
+        <div class="chapter" id="s6">
+            <div class="chapter-header">
+                <div class="chapter-num">06</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Red y Seguridad</div>
+                    <div class="chapter-title">Firewall — firewalld</div>
+                    <div class="chapter-desc">CentOS usa firewalld como gestor de firewall. Controla qué tráfico entra y sale del servidor por puerto y protocolo.</div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">Activar y configurar firewalld</span>
+                    </div>
+                    <span class="step-num">PASO 06</span>
+                </div>
+                <div class="step-body">
+                    <div class="step-explain">
+                        <code>firewalld</code> trabaja con "zonas" y "servicios". La zona <code>public</code> es la predeterminada. Los servicios <code>http</code> y <code>https</code> abren los puertos 80 y 443 respectivamente. La flag <code>--permanent</code> hace los cambios persistentes entre reinicios.
+                    </div>
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Activar y habilitar al inicio</span>
+<span class="kw">sudo</span> systemctl enable --now firewalld
+
+<span class="cm"># Ver estado actual y reglas</span>
+<span class="kw">sudo</span> firewall-cmd --list-all
+
+<span class="cm"># Abrir puertos para web</span>
+<span class="kw">sudo</span> firewall-cmd --permanent --add-service=ssh
+<span class="kw">sudo</span> firewall-cmd --permanent --add-service=http
+<span class="kw">sudo</span> firewall-cmd --permanent --add-service=https
+
+<span class="cm"># Aplicar cambios permanentes</span>
+<span class="kw">sudo</span> firewall-cmd --reload
+
+<span class="cm"># Verificar servicios habilitados</span>
+<span class="kw">sudo</span> firewall-cmd --list-services</pre>
+                    </div>
+                    <div class="alert tip">
+                        <span class="alert-icon">💡</span>
+                        Durante el laboratorio se puede usar <code>iptables -F</code> para limpiar reglas temporalmente si algo bloquea el tráfico. En producción esto no es recomendable.
+                    </div>
+                    <table>
+                        <tr><th>Servicio</th><th>Puerto</th><th>Protocolo</th><th>Para qué</th></tr>
+                        <tr><td><code>ssh</code></td><td>22</td><td>TCP</td><td>Acceso remoto al servidor</td></tr>
+                        <tr><td><code>http</code></td><td>80</td><td>TCP</td><td>Web sin cifrar</td></tr>
+                        <tr><td><code>https</code></td><td>443</td><td>TCP</td><td>Web con SSL/TLS</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 7: SELINUX -->
+        <div class="chapter" id="s7">
+            <div class="chapter-header">
+                <div class="chapter-num">07</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Red y Seguridad</div>
+                    <div class="chapter-title">SELinux</div>
+                    <div class="chapter-desc">SELinux es un módulo de seguridad del kernel Linux que agrega control de acceso obligatorio (MAC). Viene activado por defecto en CentOS.</div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge info">INFO</span>
+                        <span class="step-name">Entender y configurar SELinux</span>
+                    </div>
+                    <span class="step-num">PASO 07</span>
+                </div>
+                <div class="step-body">
+                    <div class="step-explain">
+                        SELinux tiene tres modos: <code>Enforcing</code> (bloquea y registra), <code>Permissive</code> (solo registra sin bloquear) y <code>Disabled</code> (desactivado). Para aprender, Permissive es ideal porque no bloquea pero sí avisa.
+                    </div>
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Ver estado actual</span>
+<span class="kw">sestatus</span>
+<span class="kw">getenforce</span>
+
+<span class="cm"># Cambiar a modo permissive temporalmente</span>
+<span class="kw">sudo</span> setenforce <span class="nm">0</span>
+
+<span class="cm"># Configurar contexto SELinux para el directorio web</span>
+<span class="kw">sudo</span> semanage fcontext -a -t httpd_sys_content_t <span class="st">"/var/www/misitio(/.*)?"</span>
+<span class="kw">sudo</span> restorecon -Rv /var/www/misitio
+
+<span class="cm"># Verificar contextos aplicados</span>
+<span class="kw">ls</span> -Z /var/www/misitio</pre>
+                    </div>
+                    <div class="file-block">
+                        <div class="file-header">
+                            <span class="file-icon">📄</span>
+                            <span class="file-path">/etc/selinux/config — modo permanente</span>
+                        </div>
+                        <pre style="padding:20px;background:#08080d;font-size:0.78rem;line-height:1.8"><span class="sc">SELINUX</span>=<span class="st">permissive</span>   <span class="cm"># enforcing | permissive | disabled</span>
+<span class="sc">SELINUXTYPE</span>=<span class="st">targeted</span></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 8: NTP -->
+        <div class="chapter" id="s8">
+            <div class="chapter-header">
+                <div class="chapter-num">08</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Red y Seguridad</div>
+                    <div class="chapter-title">Sincronización de tiempo — NTP</div>
+                    <div class="chapter-desc">CentOS 10 usa chrony para sincronizar la hora con servidores NTP. La hora correcta es indispensable para certificados SSL y logs.</div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">Activar sincronización NTP</span>
+                    </div>
+                    <span class="step-num">PASO 08</span>
+                </div>
+                <div class="step-body">
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Activar sincronización automática</span>
+<span class="kw">sudo</span> timedatectl set-ntp true
+
+<span class="cm"># Ver estado de sincronización</span>
+<span class="kw">timedatectl</span> show
+
+<span class="cm"># Ver detalles de sincronización con chrony</span>
+<span class="kw">chronyc</span> tracking
+
+<span class="cm"># Ver fuentes NTP activas</span>
+<span class="kw">chronyc</span> sources</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 9: HERRAMIENTAS -->
+        <div class="chapter" id="s9">
+            <div class="chapter-header">
+                <div class="chapter-num">09</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Sistema Base</div>
+                    <div class="chapter-title">Herramientas básicas</div>
+                    <div class="chapter-desc">Un conjunto mínimo de herramientas que facilitan la administración del servidor.</div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">Instalar utilidades esenciales</span>
+                    </div>
+                    <span class="step-num">PASO 09</span>
+                </div>
+                <div class="step-body">
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="kw">sudo</span> dnf install -y \
+  vim \           <span class="cm"># Editor de texto avanzado</span>
+  wget \          <span class="cm"># Descargar archivos desde terminal</span>
+  curl \          <span class="cm"># Hacer peticiones HTTP desde terminal</span>
+  git \           <span class="cm"># Control de versiones</span>
+  net-tools \     <span class="cm"># ifconfig, netstat</span>
+  htop \          <span class="cm"># Monitor de procesos interactivo</span>
+  bash-completion \ <span class="cm"># Autocompletado mejorado</span>
+  tree \          <span class="cm"># Ver estructura de directorios</span>
+  unzip           <span class="cm"># Descomprimir archivos .zip</span></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 10: UPDATES AUTO -->
+        <div class="chapter" id="s10">
+            <div class="chapter-header">
+                <div class="chapter-num">10</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Sistema Base</div>
+                    <div class="chapter-title">Actualizaciones automáticas</div>
+                    <div class="chapter-desc">Configurar el sistema para que aplique parches de seguridad automáticamente sin intervención manual.</div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">Configurar dnf-automatic</span>
+                    </div>
+                    <span class="step-num">PASO 10</span>
+                </div>
+                <div class="step-body">
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Instalar el servicio de actualizaciones automáticas</span>
+<span class="kw">sudo</span> dnf install -y dnf-automatic
+
+<span class="cm"># Editar configuración</span>
+<span class="kw">sudo</span> nano /etc/dnf/automatic.conf</pre>
+                    </div>
+                    <div class="file-block">
+                        <div class="file-header">
+                            <span class="file-icon">📄</span>
+                            <span class="file-path">/etc/dnf/automatic.conf</span>
+                        </div>
+                        <pre style="padding:20px;background:#08080d;font-size:0.78rem;line-height:1.8"><span class="sc">apply_updates</span> = <span class="st">yes</span>   <span class="cm"># Aplicar actualizaciones automáticamente</span>
+<span class="sc">upgrade_type</span>  = <span class="st">default</span> <span class="cm"># Tipo: default | security</span></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Activar el timer de actualizaciones</span>
+<span class="kw">sudo</span> systemctl enable --now dnf-automatic.timer
+
+<span class="cm"># Verificar que el timer está activo</span>
+<span class="kw">sudo</span> systemctl status dnf-automatic.timer</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 11: APACHE -->
+        <div class="chapter" id="s11">
+            <div class="chapter-header">
+                <div class="chapter-num">11</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Servidor Web</div>
+                    <div class="chapter-title">Instalación de Apache (httpd)</div>
+                    <div class="chapter-desc">Apache HTTP Server es el servidor web más usado del mundo. En CentOS el paquete se llama <code>httpd</code>.</div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">Instalar y activar Apache</span>
+                    </div>
+                    <span class="step-num">PASO 11</span>
+                </div>
+                <div class="step-body">
+                    <div class="step-explain">
+                        <code>enable --now</code> hace dos cosas: habilita el servicio para que inicie con el sistema, y lo inicia inmediatamente sin necesidad de reiniciar.
+                    </div>
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Instalar Apache</span>
+<span class="kw">sudo</span> dnf install -y httpd
+
+<span class="cm"># Iniciar y habilitar en el arranque</span>
+<span class="kw">sudo</span> systemctl enable --now httpd
+
+<span class="cm"># Verificar que está corriendo</span>
+<span class="kw">sudo</span> systemctl status httpd
+
+<span class="cm"># Probar localmente</span>
+<span class="kw">curl</span> http://localhost</pre>
+                    </div>
+                    <div class="step-explain" style="margin-top:16px">
+                        Estructura de directorios de Apache en CentOS:
+                    </div>
+                    <div class="arch-box">
+                        <div>/etc/httpd/ <span class="label">→ configuración principal</span></div>
+                        <div>&nbsp;&nbsp;├── conf/httpd.conf <span class="label">→ config global</span></div>
+                        <div>&nbsp;&nbsp;├── conf.d/ <span class="label">→ configs adicionales (VirtualHosts aquí)</span></div>
+                        <div>&nbsp;&nbsp;└── conf.modules.d/ <span class="label">→ módulos cargados</span></div>
+                        <br>
+                        <div>/var/www/html/ <span class="label">→ raíz web por defecto</span></div>
+                        <div>/var/log/httpd/ <span class="label">→ logs de acceso y error</span></div>
+                        <div>&nbsp;&nbsp;├── access_log</div>
+                        <div>&nbsp;&nbsp;└── error_log</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 12: SITIO -->
+        <div class="chapter" id="s12">
+            <div class="chapter-header">
+                <div class="chapter-num">12</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Servidor Web</div>
+                    <div class="chapter-title">Crear el sitio web</div>
+                    <div class="chapter-desc">Se crea la estructura de directorios y el archivo HTML principal del sitio.</div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">Crear directorio y página index</span>
+                    </div>
+                    <span class="step-num">PASO 12</span>
+                </div>
+                <div class="step-body">
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Crear directorio para el sitio</span>
+<span class="kw">sudo</span> mkdir -p /var/www/misitio
+
+<span class="cm"># Crear página de inicio</span>
+<span class="kw">sudo</span> nano /var/www/misitio/index.html</pre>
+                    </div>
+                    <div class="file-block">
+                        <div class="file-header">
+                            <span class="file-icon">🌐</span>
+                            <span class="file-path">/var/www/misitio/index.html</span>
+                        </div>
+                        <pre style="padding:20px;background:#08080d;font-size:0.78rem;line-height:1.8"><span class="kw">&lt;!DOCTYPE html&gt;</span>
+<span class="kw">&lt;html</span> lang=<span class="st">"es"</span><span class="kw">&gt;</span>
+<span class="kw">&lt;head&gt;</span>
+    <span class="kw">&lt;meta</span> charset=<span class="st">"UTF-8"</span><span class="kw">&gt;</span>
+    <span class="kw">&lt;title&gt;</span>Mi Servidor CentOS<span class="kw">&lt;/title&gt;</span>
+<span class="kw">&lt;/head&gt;</span>
+<span class="kw">&lt;body&gt;</span>
+    <span class="kw">&lt;h1&gt;</span>¡Funciona!<span class="kw">&lt;/h1&gt;</span>
+    <span class="kw">&lt;p&gt;</span>Apache corriendo en CentOS 10<span class="kw">&lt;/p&gt;</span>
+<span class="kw">&lt;/body&gt;</span>
+<span class="kw">&lt;/html&gt;</span></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 13: VIRTUALHOST -->
+        <div class="chapter" id="s13">
+            <div class="chapter-header">
+                <div class="chapter-num">13</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Servidor Web</div>
+                    <div class="chapter-title">Configurar VirtualHost</div>
+                    <div class="chapter-desc">Un VirtualHost permite que Apache sirva múltiples sitios web desde el mismo servidor, identificándolos por nombre de dominio.</div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cfg">CONFIG</span>
+                        <span class="step-name">Crear archivo de VirtualHost</span>
+                    </div>
+                    <span class="step-num">PASO 13</span>
+                </div>
+                <div class="step-body">
+                    <div class="step-explain">
+                        El archivo de configuración va en <code>/etc/httpd/conf.d/</code>. Apache carga automáticamente todos los archivos <code>.conf</code> de ese directorio. La directiva <code>Options -Indexes</code> deshabilita el listado de directorios, lo cual es importante para la seguridad.
+                    </div>
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="kw">sudo</span> nano /etc/httpd/conf.d/misitio.conf</pre>
+                    </div>
+                    <div class="file-block">
+                        <div class="file-header">
+                            <span class="file-icon">⚙️</span>
+                            <span class="file-path">/etc/httpd/conf.d/misitio.conf</span>
+                        </div>
+                        <pre style="padding:20px;background:#08080d;font-size:0.78rem;line-height:1.8"><span class="kw">&lt;VirtualHost *:80&gt;</span>
+    <span class="sc">ServerName</span>    <span class="st">misitio.local</span>
+    <span class="sc">ServerAlias</span>   <span class="st">www.misitio.local</span>
+    <span class="sc">DocumentRoot</span>  <span class="st">/var/www/misitio</span>
+
+    <span class="kw">&lt;Directory /var/www/misitio&gt;</span>
+        <span class="sc">Options</span>       <span class="nm">-Indexes +FollowSymLinks</span>
+        <span class="sc">AllowOverride</span> <span class="st">All</span>
+        <span class="sc">Require</span>       <span class="st">all granted</span>
+    <span class="kw">&lt;/Directory&gt;</span>
+
+    <span class="sc">ErrorLog</span>   <span class="st">/var/log/httpd/misitio-error.log</span>
+    <span class="sc">CustomLog</span>  <span class="st">/var/log/httpd/misitio-access.log</span> combined
+<span class="kw">&lt;/VirtualHost&gt;</span></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Verificar sintaxis de la configuración</span>
+<span class="kw">sudo</span> apachectl configtest
+
+<span class="cm"># Reiniciar Apache</span>
+<span class="kw">sudo</span> systemctl restart httpd</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 14: PERMISOS -->
+        <div class="chapter" id="s14">
+            <div class="chapter-header">
+                <div class="chapter-num">14</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Servidor Web</div>
+                    <div class="chapter-title">Permisos correctos</div>
+                    <div class="chapter-desc">Apache corre como el usuario <code>apache</code>. El directorio web debe pertenecerle para que pueda leer los archivos.</div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">Asignar propietario y permisos</span>
+                    </div>
+                    <span class="step-num">PASO 14</span>
+                </div>
+                <div class="step-body">
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Propietario: usuario y grupo apache</span>
+<span class="kw">sudo</span> chown -R apache:apache /var/www/misitio
+
+<span class="cm"># Permisos: 755 para directorios, 644 para archivos</span>
+<span class="kw">sudo</span> chmod -R <span class="nm">755</span> /var/www/misitio
+
+<span class="cm"># Aplicar contexto SELinux correcto</span>
+<span class="kw">sudo</span> semanage fcontext -a -t httpd_sys_content_t <span class="st">"/var/www/misitio(/.*)?"</span>
+<span class="kw">sudo</span> restorecon -Rv /var/www/misitio</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 15: MOD_SSL -->
+        <div class="chapter" id="s15">
+            <div class="chapter-header">
+                <div class="chapter-num">15</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// SSL / HTTPS</div>
+                    <div class="chapter-title">Instalar mod_ssl</div>
+                    <div class="chapter-desc">mod_ssl es el módulo de Apache que agrega soporte para HTTPS. Sin él, Apache solo puede servir tráfico HTTP sin cifrar.</div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">Instalar módulo SSL para Apache</span>
+                    </div>
+                    <span class="step-num">PASO 15</span>
+                </div>
+                <div class="step-body">
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Instalar mod_ssl y openssl</span>
+<span class="kw">sudo</span> dnf install -y mod_ssl openssl
+
+<span class="cm"># Crear directorio para certificados</span>
+<span class="kw">sudo</span> mkdir -p /etc/httpd/ssl
+
+<span class="cm"># Reiniciar Apache para cargar el módulo</span>
+<span class="kw">sudo</span> systemctl restart httpd</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 16: CERTIFICADO -->
+        <div class="chapter" id="s16">
+            <div class="chapter-header">
+                <div class="chapter-num">16</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// SSL / HTTPS</div>
+                    <div class="chapter-title">Generar certificado SSL autofirmado</div>
+                    <div class="chapter-desc">Un certificado autofirmado cifra el tráfico igual que uno real, pero el navegador mostrará una advertencia porque no fue emitido por una CA reconocida. Es perfecto para laboratorio.</div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">Generar certificado y llave privada</span>
+                    </div>
+                    <span class="step-num">PASO 16</span>
+                </div>
+                <div class="step-body">
+                    <div class="step-explain">
+                        El comando genera dos archivos: <code>.crt</code> (certificado público que se comparte) y <code>.key</code> (llave privada que NUNCA se comparte). RSA 2048 bits es el estándar mínimo actual.
+                    </div>
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Generar certificado autofirmado válido por 1 año</span>
+<span class="kw">sudo</span> openssl req -x509 -nodes -days <span class="nm">365</span> -newkey rsa:<span class="nm">2048</span> \
+    -keyout /etc/httpd/ssl/misitio.key \
+    -out    /etc/httpd/ssl/misitio.crt
+
+<span class="cm"># Asegurar permisos: solo root puede leer la llave privada</span>
+<span class="kw">sudo</span> chmod <span class="nm">600</span> /etc/httpd/ssl/misitio.key
+<span class="kw">sudo</span> chmod <span class="nm">644</span> /etc/httpd/ssl/misitio.crt</pre>
+                    </div>
+                    <div class="alert note">
+                        <span class="alert-icon">📝</span>
+                        Al ejecutar el comando se pedirán datos del certificado. En <code>Common Name</code> escribe exactamente <code>misitio.local</code> — este campo debe coincidir con el dominio.
+                    </div>
+                    <table>
+                        <tr><th>Campo</th><th>Valor para el laboratorio</th></tr>
+                        <tr><td>Country Name</td><td>CL</td></tr>
+                        <tr><td>State</td><td>Region Metropolitana</td></tr>
+                        <tr><td>Locality</td><td>Santiago</td></tr>
+                        <tr><td>Organization</td><td>Mi Laboratorio</td></tr>
+                        <tr><td>Common Name</td><td><code>misitio.local</code> ← importante</td></tr>
+                        <tr><td>Email</td><td>admin@misitio.local</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 17: VIRTUALHOST HTTPS -->
+        <div class="chapter" id="s17">
+            <div class="chapter-header">
+                <div class="chapter-num">17</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// SSL / HTTPS</div>
+                    <div class="chapter-title">VirtualHost con HTTPS</div>
+                    <div class="chapter-desc">Se actualiza la configuración de Apache para servir el sitio por HTTPS y redirigir automáticamente el tráfico HTTP.</div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cfg">CONFIG</span>
+                        <span class="step-name">Configuración completa HTTP + HTTPS</span>
+                    </div>
+                    <span class="step-num">PASO 17</span>
+                </div>
+                <div class="step-body">
+                    <div class="file-block">
+                        <div class="file-header">
+                            <span class="file-icon">⚙️</span>
+                            <span class="file-path">/etc/httpd/conf.d/misitio.conf — configuración final</span>
+                        </div>
+                        <pre style="padding:20px;background:#08080d;font-size:0.78rem;line-height:1.8"><span class="cm"># ── Bloque HTTP: redirige todo a HTTPS ──</span>
+<span class="kw">&lt;VirtualHost *:80&gt;</span>
+    <span class="sc">ServerName</span>   <span class="st">misitio.local</span>
+    <span class="sc">ServerAlias</span>  <span class="st">www.misitio.local</span>
+    <span class="sc">Redirect</span> permanent / <span class="st">https://misitio.local/</span>
+<span class="kw">&lt;/VirtualHost&gt;</span>
+
+<span class="cm"># ── Bloque HTTPS: sirve el sitio con SSL ──</span>
+<span class="kw">&lt;VirtualHost *:443&gt;</span>
+    <span class="sc">ServerName</span>   <span class="st">misitio.local</span>
+    <span class="sc">ServerAlias</span>  <span class="st">www.misitio.local</span>
+    <span class="sc">DocumentRoot</span> <span class="st">/var/www/misitio</span>
+
+    <span class="cm"># Activar SSL y apuntar a los certificados</span>
+    <span class="sc">SSLEngine</span>            <span class="st">on</span>
+    <span class="sc">SSLCertificateFile</span>   <span class="st">/etc/httpd/ssl/misitio.crt</span>
+    <span class="sc">SSLCertificateKeyFile</span> <span class="st">/etc/httpd/ssl/misitio.key</span>
+
+    <span class="cm"># Solo protocolos modernos (deshabilitar TLS 1.0 y 1.1)</span>
+    <span class="sc">SSLProtocol</span>   all -SSLv3 -TLSv1 -TLSv1.1
+    <span class="sc">SSLCipherSuite</span> HIGH:!aNULL:!MD5:!3DES
+
+    <span class="kw">&lt;Directory /var/www/misitio&gt;</span>
+        <span class="sc">Options</span>       <span class="nm">-Indexes +FollowSymLinks</span>
+        <span class="sc">AllowOverride</span> <span class="st">All</span>
+        <span class="sc">Require</span>       <span class="st">all granted</span>
+    <span class="kw">&lt;/Directory&gt;</span>
+
+    <span class="sc">ErrorLog</span>  <span class="st">/var/log/httpd/misitio-ssl-error.log</span>
+    <span class="sc">CustomLog</span> <span class="st">/var/log/httpd/misitio-ssl-access.log</span> combined
+<span class="kw">&lt;/VirtualHost&gt;</span></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># SELinux: permitir Apache con SSL</span>
+<span class="kw">sudo</span> setsebool -P httpd_can_network_connect on
+<span class="kw">sudo</span> semanage fcontext -a -t cert_t <span class="st">"/etc/httpd/ssl(/.*)?"</span>
+<span class="kw">sudo</span> restorecon -Rv /etc/httpd/ssl
+
+<span class="cm"># Verificar sintaxis y reiniciar</span>
+<span class="kw">sudo</span> apachectl configtest
+<span class="kw">sudo</span> systemctl restart httpd
+
+<span class="cm"># Verificar que escucha en ambos puertos</span>
+<span class="kw">sudo</span> ss -tlnp | grep httpd</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 18: VERIFICACION -->
+        <div class="chapter" id="s18">
+            <div class="chapter-header">
+                <div class="chapter-num">18</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// SSL / HTTPS</div>
+                    <div class="chapter-title">Verificación del servidor</div>
+                    <div class="chapter-desc">Comandos para confirmar que todo está funcionando correctamente.</div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cmd">CMD</span>
+                        <span class="step-name">Pruebas de funcionamiento</span>
+                    </div>
+                    <span class="step-num">PASO 18</span>
+                </div>
+                <div class="step-body">
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Probar HTTP local (debe redirigir)</span>
+<span class="kw">curl</span> -v http://localhost
+
+<span class="cm"># Probar HTTPS local (-k ignora advertencia de cert autofirmado)</span>
+<span class="kw">curl</span> -k https://localhost
+
+<span class="cm"># Ver información del certificado</span>
+<span class="kw">echo</span> | openssl s_client -connect misitio.local:<span class="nm">443</span> <span class="nm">2</span>>/dev/null \
+  | openssl x509 -noout -dates -subject
+
+<span class="cm"># Ver logs en tiempo real</span>
+<span class="kw">sudo</span> tail -f /var/log/httpd/misitio-ssl-access.log</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 19: DNS LOCAL -->
+        <div class="chapter" id="s19">
+            <div class="chapter-header">
+                <div class="chapter-num">19</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Red Local</div>
+                    <div class="chapter-title">Configurar DNS local (/etc/hosts)</div>
+                    <div class="chapter-desc">Para acceder al servidor por nombre en lugar de IP, se edita el archivo hosts en cada máquina cliente. Es la solución más simple para laboratorio.</div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-header">
+                    <div class="step-title-wrap">
+                        <span class="step-badge cfg">CONFIG</span>
+                        <span class="step-name">Agregar entradas en /etc/hosts</span>
+                    </div>
+                    <span class="step-num">PASO 19</span>
+                </div>
+                <div class="step-body">
+                    <div class="step-explain">
+                        El archivo <code>/etc/hosts</code> es consultado antes que el DNS real. Si el nombre está ahí, el sistema lo resuelve localmente sin consultar ningún servidor DNS.
+                    </div>
+
+                    <div class="two-col">
+                        <div>
+                            <div class="file-block">
+                                <div class="file-header">
+                                    <span class="file-icon">🐧</span>
+                                    <span class="file-path">En Kali Linux — /etc/hosts</span>
+                                </div>
+                                <pre style="padding:16px;background:#08080d;font-size:0.75rem;line-height:1.8"><span class="kw">sudo</span> nano /etc/hosts
+
+<span class="cm"># Agregar al final:</span>
+<span class="nm">192.168.X.X</span>  <span class="st">misitio.local</span>
+<span class="nm">192.168.X.X</span>  <span class="st">www.misitio.local</span></pre>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="file-block">
+                                <div class="file-header">
+                                    <span class="file-icon">🪟</span>
+                                    <span class="file-path">En Windows — hosts</span>
+                                </div>
+                                <pre style="padding:16px;background:#08080d;font-size:0.75rem;line-height:1.8"><span class="cm"># Abrir como Administrador:</span>
+C:\Windows\System32\
+  drivers\etc\hosts
+
+<span class="cm"># Agregar al final:</span>
+<span class="nm">192.168.X.X</span>  <span class="st">misitio.local</span></pre>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-top"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">COPIAR</button></div>
+                        <pre><span class="cm"># Verificar que resuelve correctamente</span>
+<span class="kw">ping</span> misitio.local
+
+<span class="cm"># Probar el sitio por nombre</span>
+<span class="kw">curl</span> -k https://misitio.local
+
+<span class="cm"># Escanear con whatweb para ver el stack</span>
+<span class="kw">whatweb</span> https://misitio.local</pre>
+                    </div>
+                    <div class="alert tip">
+                        <span class="alert-icon">💡</span>
+                        Reemplaza <code>192.168.X.X</code> con la IP real de tu servidor CentOS. Puedes verla con <code>ip a</code> en el servidor.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 20: RESUMEN -->
+        <div class="chapter" id="s20">
+            <div class="chapter-header">
+                <div class="chapter-num">20</div>
+                <div class="chapter-info">
+                    <div class="chapter-tag">// Resumen Final</div>
+                    <div class="chapter-title">Stack completo del servidor</div>
+                    <div class="chapter-desc">Resumen de toda la infraestructura configurada y checklist de verificación.</div>
+                </div>
+            </div>
+
+            <div class="arch-box">
+                <div>Cliente (Kali / Windows)</div>
+                <div>&nbsp;&nbsp;<span class="arrow">│</span></div>
+                <div>&nbsp;&nbsp;<span class="arrow">│</span> <span class="label">resuelve misitio.local → 192.168.X.X via /etc/hosts</span></div>
+                <div>&nbsp;&nbsp;<span class="arrow">↓</span></div>
+                <div><span class="node">firewalld</span> <span class="label">→ permite puertos 22, 80, 443</span></div>
+                <div>&nbsp;&nbsp;<span class="arrow">│</span></div>
+                <div>&nbsp;&nbsp;<span class="arrow">↓</span></div>
+                <div><span class="node">Apache httpd 2.4</span></div>
+                <div>&nbsp;&nbsp;<span class="arrow">├── :80</span>  <span class="label">→ redirige permanentemente a HTTPS</span></div>
+                <div>&nbsp;&nbsp;<span class="arrow">└── :443</span> <span class="label">→ sirve contenido con SSL/TLS</span></div>
+                <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">└──</span> <span class="node">mod_ssl</span> <span class="label">certificado autofirmado RSA 2048</span></div>
+                <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">└──</span> <span class="node">VirtualHost</span> misitio.local</div>
+                <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">└──</span> /var/www/misitio/index.html</div>
+                <br>
+                <div><span class="node">SELinux</span> <span class="label">→ contextos httpd_sys_content_t y cert_t</span></div>
+                <div><span class="node">Chrony</span>  <span class="label">→ NTP sincronizado · America/Santiago</span></div>
+                <div><span class="node">dnf-automatic</span> <span class="label">→ parches de seguridad automáticos</span></div>
+            </div>
+
+            <h3 style="font-family:'Syne',sans-serif;font-size:1rem;letter-spacing:2px;color:var(--text);margin:32px 0 16px;text-transform:uppercase;">Checklist de verificación</h3>
+
+            <div class="checklist">
+                <div class="check-item"><div class="check-icon">✓</div> Sistema actualizado con dnf update</div>
+                <div class="check-item"><div class="check-icon">✓</div> Hostname configurado permanentemente</div>
+                <div class="check-item"><div class="check-icon">✓</div> Zona horaria America/Santiago</div>
+                <div class="check-item"><div class="check-icon">✓</div> Usuario sudo creado (no trabajar como root)</div>
+                <div class="check-item"><div class="check-icon">✓</div> SSH: PermitRootLogin desactivado</div>
+                <div class="check-item"><div class="check-icon">✓</div> Firewalld activo con puertos 22, 80, 443</div>
+                <div class="check-item"><div class="check-icon">✓</div> SELinux en modo permissive con contextos</div>
+                <div class="check-item"><div class="check-icon">✓</div> NTP sincronizado con chrony</div>
+                <div class="check-item"><div class="check-icon">✓</div> Apache httpd instalado y activo</div>
+                <div class="check-item"><div class="check-icon">✓</div> VirtualHost misitio.local configurado</div>
+                <div class="check-item"><div class="check-icon">✓</div> mod_ssl instalado y activo</div>
+                <div class="check-item"><div class="check-icon">✓</div> Certificado SSL autofirmado generado</div>
+                <div class="check-item"><div class="check-icon">✓</div> HTTP redirige a HTTPS automáticamente</div>
+                <div class="check-item"><div class="check-icon">✓</div> Permisos correctos en /var/www/misitio</div>
+                <div class="check-item"><div class="check-icon">✓</div> DNS local en /etc/hosts</div>
+                <div class="check-item"><div class="check-icon">✓</div> dnf-automatic configurado</div>
+            </div>
+        </div>
+
+    </div><!-- /content -->
+</main>
+
+<script>
+    // Copy button functionality
+    function copyCode(btn) {
+        const pre = btn.closest('.code-block').querySelector('pre');
+        const text = pre.innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            btn.textContent = 'COPIADO ✓';
+            btn.classList.add('copied');
+            setTimeout(() => {
+                btn.textContent = 'COPIAR';
+                btn.classList.remove('copied');
+            }, 2000);
+        });
+    }
+
+    // Active nav item on scroll
+    const chapters = document.querySelectorAll('.chapter');
+    const navItems = document.querySelectorAll('.nav-item');
+
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const id = entry.target.id;
+                navItems.forEach(item => {
+                    item.classList.remove('active');
+                    if (item.getAttribute('href') === '#' + id) {
+                        item.classList.add('active');
+                    }
+                });
+            }
+        });
+    }, { threshold: 0.3 });
+
+    chapters.forEach(ch => observer.observe(ch));
+</script>
+</body>
+</html>
